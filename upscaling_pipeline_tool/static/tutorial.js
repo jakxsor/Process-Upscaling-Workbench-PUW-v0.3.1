@@ -942,13 +942,22 @@ let tutorialSettleFrame = null;
 // window (comfortably past that 120ms delay plus its own scroll) closes the gap.
 const TUTORIAL_SETTLE_MIN_MS = 500;
 const TUTORIAL_SETTLE_MAX_MS = 2000;
+// requestAnimationFrame recurses through tick() rather than being re-entered via the event loop,
+// so a host that resolves it immediately and synchronously (as the headless check harness does,
+// to run this flow under Node without a real browser) turns the ms-based caps above into an
+// unbounded synchronous recursion - hence this hard tick ceiling as a stack-safe backstop. A real
+// browser paces rAF at the display refresh rate, so TUTORIAL_SETTLE_MAX_MS is reached in well under
+// this many ticks there; it only bites under a synchronous mock.
+const TUTORIAL_SETTLE_MAX_TICKS = 300;
 function watchTutorialScrollSettle(step) {
   if (tutorialSettleFrame) cancelAnimationFrame(tutorialSettleFrame);
   let lastRect = null;
   let stableFrames = 0;
+  let ticks = 0;
   const startedAt = performance.now();
   const tick = () => {
     if ($("tutorialOverlay").hidden) { tutorialSettleFrame = null; return; }
+    ticks += 1;
     const target = document.querySelector(step.target);
     const rect = target ? target.getBoundingClientRect() : null;
     const unchanged = lastRect && rect && rect.top === lastRect.top && rect.left === lastRect.left;
@@ -957,7 +966,7 @@ function watchTutorialScrollSettle(step) {
     positionTutorialStep(step);
     const elapsed = performance.now() - startedAt;
     const settled = stableFrames >= 4 && elapsed >= TUTORIAL_SETTLE_MIN_MS;
-    if (settled || elapsed >= TUTORIAL_SETTLE_MAX_MS) { tutorialSettleFrame = null; return; }
+    if (settled || elapsed >= TUTORIAL_SETTLE_MAX_MS || ticks >= TUTORIAL_SETTLE_MAX_TICKS) { tutorialSettleFrame = null; return; }
     tutorialSettleFrame = requestAnimationFrame(tick);
   };
   tutorialSettleFrame = requestAnimationFrame(tick);
