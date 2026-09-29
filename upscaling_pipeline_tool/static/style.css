@@ -8265,6 +8265,12 @@
       inset: 0;
       z-index: 940;
       background: transparent;
+      /* The overlay sits above the app's own modals (z-index 920) so the spotlight and card can
+         highlight elements inside them, but it must not intercept clicks aimed at that real
+         content underneath - otherwise every click on a spotlighted button (Apply Pathway, Save
+         reaction balance, ...) hits this transparent layer instead and closes the tutorial and
+         the modal together. Only the card re-enables pointer events for itself. */
+      pointer-events: none;
     }
 
     .tutorial-overlay[hidden] {
@@ -8336,6 +8342,7 @@
     .tutorial-card {
       position: fixed;
       z-index: 902;
+      pointer-events: auto;
       display: grid;
       gap: 9px;
       padding: 14px;

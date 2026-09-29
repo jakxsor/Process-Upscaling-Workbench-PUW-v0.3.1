@@ -16917,9 +16917,6 @@
       state.tutorialFull = !state.tutorialFull;
       goToTutorialStep(state.tutorialIndex, state.tutorialIndex);
     });
-    $("tutorialOverlay").addEventListener("click", event => {
-      if (event.target === $("tutorialOverlay")) closeTutorial();
-    });
     window.addEventListener("resize", () => {
       if ($("tutorialOverlay").hidden) return;
       positionTutorialStep(tutorialSteps[state.tutorialIndex] || tutorialSteps[0]);
