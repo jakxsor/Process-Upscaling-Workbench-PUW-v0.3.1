@@ -932,10 +932,21 @@ function tutorialScrollTargetIntoView(target) {
 }
 
 let tutorialSettleFrame = null;
+// Several step actions call fitBoard() immediately, then centerSelection() again 120ms later
+// (both animate the board with a smooth scroll) - see tutorialEnsureTask/tutorialFocusReactionBlock.
+// fitBoard()'s scroll is often a no-op (the board is already positioned), which used to let this
+// watcher see 4 stable frames within that first ~120ms and stop - before centerSelection()'s later,
+// actually-meaningful scroll had even started. The card and spotlight then stayed frozen at the
+// pre-centering position while the real target drifted away underneath, producing the overlap seen
+// on steps like "Recovery Unit Options" and "Compare Options". Requiring a minimum real-time watch
+// window (comfortably past that 120ms delay plus its own scroll) closes the gap.
+const TUTORIAL_SETTLE_MIN_MS = 500;
+const TUTORIAL_SETTLE_MAX_MS = 2000;
 function watchTutorialScrollSettle(step) {
   if (tutorialSettleFrame) cancelAnimationFrame(tutorialSettleFrame);
   let lastRect = null;
   let stableFrames = 0;
+  const startedAt = performance.now();
   const tick = () => {
     if ($("tutorialOverlay").hidden) { tutorialSettleFrame = null; return; }
     const target = document.querySelector(step.target);
@@ -944,7 +955,9 @@ function watchTutorialScrollSettle(step) {
     stableFrames = unchanged ? stableFrames + 1 : 0;
     lastRect = rect;
     positionTutorialStep(step);
-    if (stableFrames >= 4) { tutorialSettleFrame = null; return; }
+    const elapsed = performance.now() - startedAt;
+    const settled = stableFrames >= 4 && elapsed >= TUTORIAL_SETTLE_MIN_MS;
+    if (settled || elapsed >= TUTORIAL_SETTLE_MAX_MS) { tutorialSettleFrame = null; return; }
     tutorialSettleFrame = requestAnimationFrame(tick);
   };
   tutorialSettleFrame = requestAnimationFrame(tick);
