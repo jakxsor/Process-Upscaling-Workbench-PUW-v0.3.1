@@ -19,7 +19,7 @@ const tutorialMaterialRows = [
 ];
 
 const tutorialRecoveryRows = [
-  { role: "input", name: "benzyl acetate product-rich liquid", quantity: "3.25", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+  { role: "input", name: "benzyl acetate product-rich liquid", quantity: "3.05", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
   { role: "output", name: "triethylamine overhead recovery", quantity: "0.20", unit: "kg", phase: "V", status: "estimated", timing: "in-process intermediate", fate: "recovered solvent", scalingMode: "per batch", destinationGroup: "G1", recoveryPercent: "95" },
   { role: "output", name: "acetic anhydride recovery cut", quantity: "0.08", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "recover", scalingMode: "per batch", destinationGroup: "G1", recoveryPercent: "90" },
   { role: "output", name: "benzyl acetate product", quantity: "1.25", unit: "kg", phase: "L", status: "estimated", timing: "final output", fate: "product", scalingMode: "per batch" },
@@ -698,7 +698,7 @@ const tutorialSteps = [
   },
   {
     target: "#separationSimulatorBody",
-    anchor: ".pathway-context",
+    anchor: ".pathway-context strong",
     title: "Part 3 · 2. Lutze Scene",
     body: "The objective stays at the top: the product to retain and the component destinations. Open Edit mixture only when these inputs need correction.",
     details: ["The pathway workspace stays separate from mixture editing.", "Nothing changes in the main graph until a complete draft is applied."],
@@ -714,7 +714,7 @@ const tutorialSteps = [
   },
   {
     target: ".pathway-alternative-grid",
-    anchor: ".pathway-alternative-grid [data-pathway-use-alternative]",
+    anchor: ".pathway-alternative-grid .pathway-alternative-card",
     title: "Part 3 · 4. Recommended Pathways",
     body: "Each card is a complete route profile: strongest evidence, fewer operations, or lower thermal exposure. These are screening alternatives, not process simulation results.",
     details: ["Compare the full sequence and its evidence score.", "Use as editable draft moves a recommendation into the manual builder."],
@@ -902,6 +902,7 @@ function closeTutorial(options = {}) {
   closeSeparationSimulator();
   if (tutorialSettleFrame) cancelAnimationFrame(tutorialSettleFrame);
   tutorialSettleFrame = null;
+  tutorialRestoreBoardEditor();
   state.tutorialSessionActive = false;
   if (typeof markProjectAutosaveAsExampleOnly === "function") markProjectAutosaveAsExampleOnly();
 }
@@ -913,6 +914,7 @@ async function renderTutorialStep() {
   // A target inside a folded section (the source text once blocks exist) has no box to spotlight.
   const fold = target?.closest?.("details");
   if (fold && !fold.open) fold.open = true;
+  tutorialFitBoardEditor(target);
   // Scroll to what the step is about: the anchor when there is one, else the target.
   tutorialScrollTargetIntoView(tutorialAnchorElement(step) || target);
   positionTutorialStep(step);
@@ -921,82 +923,214 @@ async function renderTutorialStep() {
 
 function tutorialScrollTargetIntoView(target) {
   if (!target) return;
-  const scroller = target.closest?.(".modal-body");
-  target.scrollIntoView?.({ block: "center", inline: "center", behavior: scroller ? "auto" : "smooth" });
-  if (!scroller) return;
+  const scroller = target.closest?.(".modal-body, #groupFlow, .panel-body");
+  const band = scroller ? tutorialVisibleBand(target) : null;
+  const before = target.getBoundingClientRect?.();
+  // A target taller than the visible band of its scroller (the phenomena grid, the findings
+  // list) is aligned to the top so its heading shows; centring it showed only its middle.
+  const tall = Boolean(band && before && before.height > band.bottom - band.top - 16);
+  // Horizontal centring is for the board only: on a side panel it scrolled the panel sideways
+  // and cut the first words off every finding.
+  const inline = scroller && scroller.id !== "groupFlow" ? "nearest" : "center";
+  target.scrollIntoView?.({ block: tall ? "start" : "center", inline, behavior: scroller ? "auto" : "smooth" });
+  if (!scroller || !band) return;
+  if (inline === "nearest" && scroller.scrollLeft) scroller.scrollLeft = 0;
+  // Centre in the part of the scroller that is actually visible: on the board the material
+  // editor covers the lower part, and centring in the full height put the target under it.
   const targetRect = target.getBoundingClientRect?.();
-  const scrollerRect = scroller.getBoundingClientRect?.();
-  if (!targetRect || !scrollerRect || !Number.isFinite(scroller.scrollTop)) return;
-  const delta = targetRect.top - scrollerRect.top - (scrollerRect.height - targetRect.height) / 2;
+  if (!targetRect || !Number.isFinite(scroller.scrollTop)) return;
+  const bandHeight = band.bottom - band.top;
+  const delta = tall
+    ? targetRect.top - band.top - 8
+    : targetRect.top - band.top - Math.max(0, (bandHeight - targetRect.height) / 2);
   scroller.scrollTo?.({ top: Math.max(0, scroller.scrollTop + delta), behavior: "auto" });
 }
 
+// The material editor slides up over the board. When a step points at something on the board
+// that does not fit in the strip left above the editor (a low window, an expanded task), the
+// editor is folded to its minimum for that step and restored as soon as a step points inside it.
+let tutorialEditorHeightBefore = null;
+function tutorialFitBoardEditor(target) {
+  if (typeof setStepEditorHeight !== "function") return;
+  const editor = document.getElementById("stepFlowInspector");
+  if (!editor?.classList?.contains("resizable")) return;
+  const onBoard = Boolean(target?.closest?.("#groupFlow")) && !target.closest?.("#stepFlowInspector");
+  if (onBoard) {
+    const band = tutorialVisibleBand(target);
+    const rect = target.getBoundingClientRect?.();
+    if (!band || !rect || rect.height + 24 <= band.bottom - band.top) return;
+    if (tutorialEditorHeightBefore === null) tutorialEditorHeightBefore = Math.round(editor.getBoundingClientRect().height);
+    setStepEditorHeight(0);
+  } else if (tutorialEditorHeightBefore !== null) {
+    tutorialRestoreBoardEditor();
+  }
+}
+
+function tutorialRestoreBoardEditor() {
+  if (tutorialEditorHeightBefore === null || typeof setStepEditorHeight !== "function") return;
+  setStepEditorHeight(tutorialEditorHeightBefore);
+  tutorialEditorHeightBefore = null;
+}
+
 let tutorialSettleFrame = null;
+// Several step actions call fitBoard() immediately, then centerSelection() again 120ms later
+// (both animate the board with a smooth scroll) - see tutorialEnsureTask/tutorialFocusReactionBlock.
+// fitBoard()'s scroll is often a no-op (the board is already positioned), which used to let this
+// watcher see 4 stable frames within that first ~120ms and stop - before centerSelection()'s later,
+// actually-meaningful scroll had even started. The card and spotlight then stayed frozen at the
+// pre-centering position while the real target drifted away underneath, producing the overlap seen
+// on steps like "Recovery Unit Options" and "Compare Options". Requiring a minimum real-time watch
+// window (comfortably past that 120ms delay plus its own scroll) closes the gap.
+const TUTORIAL_SETTLE_MIN_MS = 500;
+const TUTORIAL_SETTLE_MAX_MS = 2000;
+// requestAnimationFrame recurses through tick() rather than being re-entered via the event loop,
+// so a host that resolves it immediately and synchronously (as the headless check harness does,
+// to run this flow under Node without a real browser) turns the ms-based caps above into an
+// unbounded synchronous recursion - hence this hard tick ceiling as a stack-safe backstop. A real
+// browser paces rAF at the display refresh rate, so TUTORIAL_SETTLE_MAX_MS is reached in well under
+// this many ticks there; it only bites under a synchronous mock.
+const TUTORIAL_SETTLE_MAX_TICKS = 300;
 function watchTutorialScrollSettle(step) {
   if (tutorialSettleFrame) cancelAnimationFrame(tutorialSettleFrame);
   let lastRect = null;
   let stableFrames = 0;
+  let ticks = 0;
+  const startedAt = performance.now();
   const tick = () => {
     if ($("tutorialOverlay").hidden) { tutorialSettleFrame = null; return; }
+    ticks += 1;
     const target = document.querySelector(step.target);
     const rect = target ? target.getBoundingClientRect() : null;
     const unchanged = lastRect && rect && rect.top === lastRect.top && rect.left === lastRect.left;
     stableFrames = unchanged ? stableFrames + 1 : 0;
     lastRect = rect;
     positionTutorialStep(step);
-    if (stableFrames >= 4) { tutorialSettleFrame = null; return; }
+    const elapsed = performance.now() - startedAt;
+    const settled = stableFrames >= 4 && elapsed >= TUTORIAL_SETTLE_MIN_MS;
+    if (settled || elapsed >= TUTORIAL_SETTLE_MAX_MS || ticks >= TUTORIAL_SETTLE_MAX_TICKS) {
+      tutorialSettleFrame = null;
+      // The step's own action may have scrolled the board after the first scroll-into-view
+      // (centerSelection() runs 120 ms later): if that left the target hidden under the material
+      // editor or outside its scroller, bring it back once now that everything has stopped moving.
+      if (target && !tutorialTargetMostlyVisible(target)) {
+        tutorialScrollTargetIntoView(target);
+        positionTutorialStep(step);
+      }
+      return;
+    }
     tutorialSettleFrame = requestAnimationFrame(tick);
   };
   tutorialSettleFrame = requestAnimationFrame(tick);
 }
 
-// The part of the target that is on screen: a 2000 px findings panel counts as what is visible.
+// At least 60% of the target's height is inside the visible band of its scroll container.
+function tutorialTargetMostlyVisible(target) {
+  const rect = target.getBoundingClientRect?.();
+  if (!rect || !(rect.height > 0)) return true;
+  const visible = tutorialTargetRect(target);
+  return visible.height >= Math.min(rect.height, 60) * 0.6 && visible.height >= rect.height * 0.6 - 1 || visible.height >= 120;
+}
+
+// The part of the target that is on screen and inside its own scroll container: a 2000 px findings
+// panel counts as what is visible, and a board element that has scrolled under the material
+// editor counts as nothing (the spotlight used to frame a region where the target was hidden).
 function tutorialTargetRect(target) {
   if (!target) return { left: 24, top: 90, width: 220, height: 90, right: 244, bottom: 180 };
   const rect = target.getBoundingClientRect();
-  const left = Math.max(0, rect.left);
-  const top = Math.max(0, rect.top);
-  const right = Math.min(window.innerWidth, rect.right);
-  const bottom = Math.min(window.innerHeight, rect.bottom);
+  let left = Math.max(0, rect.left);
+  let top = Math.max(0, rect.top);
+  let right = Math.min(window.innerWidth, rect.right);
+  let bottom = Math.min(window.innerHeight, rect.bottom);
+  const band = tutorialVisibleBand(target);
+  if (band) {
+    left = Math.max(left, band.left);
+    top = Math.max(top, band.top);
+    right = Math.min(right, band.right);
+    bottom = Math.min(bottom, band.bottom);
+  }
   return { left, top, right, bottom, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+}
+
+// The visible band of the scroll container the target lives in. On the process board the
+// material editor slides up over the lower part of the board, so that part is subtracted too.
+function tutorialVisibleBand(target) {
+  const scroller = target?.closest?.(".modal-body, #groupFlow, .panel-body");
+  if (!scroller?.getBoundingClientRect) return null;
+  const s = scroller.getBoundingClientRect();
+  const band = { left: s.left, top: s.top, right: s.right, bottom: s.bottom };
+  if (scroller.id === "groupFlow") {
+    const editor = document.getElementById("stepFlowInspector");
+    const e = editor && !editor.hidden ? editor.getBoundingClientRect?.() : null;
+    if (e && e.height > 0 && e.top < band.bottom && e.top > band.top) band.bottom = e.top;
+  }
+  return band;
 }
 
 function tutorialTargetIsLarge(rect) {
   return rect.width > 360 || rect.height > 240;
 }
 
-// Where the arrow points. A small target: its centre. A large one: the step's `anchor` element
-// when it names one (the selected task's head, the first pathway card, the first finding), else
-// the top-left zone where a panel keeps its title. Pointing at the centre of the board or of
-// the Lutze scene pointed at nothing in particular.
+const TUTORIAL_RING_MAX_WIDTH = 460;
+const TUTORIAL_RING_MAX_HEIGHT = 140;
+
 // The first match of the anchor selector that is on screen; else the first match at all (the
 // findings panel is 2000 px tall, and its first card may be scrolled away).
 function tutorialAnchorElement(step) {
   if (!step.anchor) return null;
   const matches = Array.from(document.querySelectorAll(step.anchor));
-  const onScreen = matches.find(el => {
-    const a = el.getBoundingClientRect();
-    return a.width > 0 && a.height > 0 && a.bottom > 0 && a.top < window.innerHeight;
-  });
+  const onScreen = matches.find(el => tutorialAnchorVisible(el));
   return onScreen || matches[0] || null;
 }
 
-function tutorialAnchorPoint(step, target, rect) {
-  const anchorEl = tutorialAnchorElement(step);
-  if (anchorEl) {
-    const a = anchorEl.getBoundingClientRect();
-    if (a.width > 0 && a.height > 0 && a.bottom > 0 && a.top < window.innerHeight) {
-      return { x: a.left + a.width / 2, y: a.top + Math.min(a.height / 2, 24), rect: a, sub: true };
-    }
-  }
-  if (!tutorialTargetIsLarge(rect)) return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, rect, sub: false };
-  return { x: rect.left + Math.min(rect.width / 2, 150), y: rect.top + Math.min(rect.height / 2, 44), rect, sub: false };
+// Visible for at least half its height, inside the window and inside its scroller's band: a
+// task head scrolled up under the board's toolbar is in the window but not on screen.
+function tutorialAnchorVisible(el) {
+  const a = el.getBoundingClientRect();
+  if (!(a.width > 0 && a.height > 0 && a.bottom > 0 && a.top < window.innerHeight)) return false;
+  const band = tutorialVisibleBand(el);
+  if (!band) return true;
+  const visible = Math.min(a.bottom, band.bottom) - Math.max(a.top, band.top);
+  return visible >= a.height / 2;
 }
 
-// Beside the target when it fits (right, left, below, above, in that order); otherwise the
-// viewport corner that hides the least of the target and never its anchor. The card used to sit
-// on top of large targets - the board, the MFA grid, the Lutze scene - with the arrow buried
-// underneath it.
+// What the arrow aims at. With an `anchor` element (the selected task's head, the first pathway
+// card, the first finding) it is the ring drawn around that element's top-left zone - a 1300 px
+// bar keeps its title there - and the arrow stops at the ring's edge. Without one it is the
+// spotlight itself: pointing at the centre of the board or of the Lutze scene pointed at nothing
+// in particular, so no ring is drawn and the arrow stops at the spotlight's edge.
+function tutorialAnchorPoint(step, target, rect) {
+  const anchorEl = tutorialAnchorElement(step);
+  if (anchorEl && tutorialAnchorVisible(anchorEl)) {
+    const a = anchorEl.getBoundingClientRect();
+    {
+      const ring = {
+        left: a.left - 6,
+        top: a.top - 6,
+        width: Math.min(a.width + 12, TUTORIAL_RING_MAX_WIDTH),
+        height: Math.min(a.height + 12, TUTORIAL_RING_MAX_HEIGHT)
+      };
+      ring.right = ring.left + ring.width;
+      ring.bottom = ring.top + ring.height;
+      return { x: ring.left + ring.width / 2, y: ring.top + ring.height / 2, rect: ring, sub: true };
+    }
+  }
+  const pad = 8;
+  const box = { left: rect.left - pad, top: rect.top - pad, right: rect.right + pad, bottom: rect.bottom + pad };
+  box.width = box.right - box.left;
+  box.height = box.bottom - box.top;
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, rect: box, sub: false };
+}
+
+function tutorialRectOverlap(left, top, width, height, box) {
+  return Math.max(0, Math.min(left + width, box.right) - Math.max(left, box.left))
+    * Math.max(0, Math.min(top + height, box.bottom) - Math.max(top, box.top));
+}
+
+// Beside the ring when the step has one, else beside the target: right, left, below, above.
+// Of the positions that fit on screen, the one closest to what the arrow aims at, so the arrow is
+// short or not needed at all. Beside the whole panel with a 300 px arrow to the ring, the arrow
+// crossed the very content the step was about. Otherwise the viewport corner that hides the least
+// of the target and never its ring.
 function tutorialCardPlacement(rect, anchor, cardWidth, cardHeight) {
   const gap = 18;
   const margin = 16;
@@ -1004,24 +1138,36 @@ function tutorialCardPlacement(rect, anchor, cardWidth, cardHeight) {
   const maxTop = window.innerHeight - cardHeight - margin;
   const clampLeft = value => Math.max(margin, Math.min(value, maxLeft));
   const clampTop = value => Math.max(margin, Math.min(value, maxTop));
-  const fits = (left, top) => left >= margin && top >= margin && left <= maxLeft && top <= maxTop;
-  const beside = [
-    { left: rect.right + gap, top: clampTop(rect.top) },
-    { left: rect.left - cardWidth - gap, top: clampTop(rect.top) },
-    { left: clampLeft(rect.left), top: rect.bottom + gap },
-    { left: clampLeft(rect.left), top: rect.top - cardHeight - gap }
-  ].find(candidate => fits(candidate.left, candidate.top));
-  if (beside) return beside;
-  const overlap = candidate => Math.max(0, Math.min(candidate.left + cardWidth, rect.right) - Math.max(candidate.left, rect.left))
-    * Math.max(0, Math.min(candidate.top + cardHeight, rect.bottom) - Math.max(candidate.top, rect.top));
-  const coversAnchor = candidate => anchor.x >= candidate.left - 12 && anchor.x <= candidate.left + cardWidth + 12
-    && anchor.y >= candidate.top - 12 && anchor.y <= candidate.top + cardHeight + 12;
+  const fits = candidate => candidate.left >= margin && candidate.top >= margin && candidate.left <= maxLeft && candidate.top <= maxTop;
+  const beside = box => [
+    { left: box.right + gap, top: clampTop(box.top) },
+    { left: box.left - cardWidth - gap, top: clampTop(box.top) },
+    { left: clampLeft(box.left), top: box.bottom + gap },
+    { left: clampLeft(box.left), top: box.top - cardHeight - gap }
+  ];
+  const gapTo = (candidate, box) => Math.hypot(
+    Math.max(box.left - (candidate.left + cardWidth), candidate.left - box.right, 0),
+    Math.max(box.top - (candidate.top + cardHeight), candidate.top - box.bottom, 0)
+  );
+  const ring = anchor.sub ? anchor.rect : null;
+  if (ring) {
+    const nearRing = beside(ring).filter(fits).filter(candidate => tutorialRectOverlap(candidate.left, candidate.top, cardWidth, cardHeight, ring) === 0);
+    if (nearRing.length) {
+      return nearRing.map((candidate, order) => ({ ...candidate, score: gapTo(candidate, ring) * 10 + order }))
+        .sort((a, b) => a.score - b.score)[0];
+    }
+  }
+  const besideTarget = beside(rect).find(fits);
+  if (besideTarget) return besideTarget;
+  const coversRing = candidate => ring
+    ? tutorialRectOverlap(candidate.left, candidate.top, cardWidth, cardHeight, ring) > 0
+    : anchor.x >= candidate.left - 12 && anchor.x <= candidate.left + cardWidth + 12 && anchor.y >= candidate.top - 12 && anchor.y <= candidate.top + cardHeight + 12;
   return [
     { left: maxLeft, top: maxTop },
     { left: margin, top: maxTop },
     { left: maxLeft, top: margin },
     { left: margin, top: margin }
-  ].map(candidate => ({ ...candidate, score: overlap(candidate) + (coversAnchor(candidate) ? 1e9 : 0) }))
+  ].map(candidate => ({ ...candidate, score: tutorialRectOverlap(candidate.left, candidate.top, cardWidth, cardHeight, rect) + (coversRing(candidate) ? 1e9 : 0) }))
     .sort((a, b) => a.score - b.score)[0];
 }
 
@@ -1071,18 +1217,22 @@ function positionTutorialStep(step) {
   card.style.top = `${placement.top}px`;
 
   positionTutorialArrow(target ? anchor : null, card, arrow);
-  positionTutorialAnchorRing(target ? anchor : null, rect);
+  // With a ring on the exact element, the spotlight only dims the rest: a second white frame
+  // around the whole panel competed with the ring for attention.
+  const ringShown = positionTutorialAnchorRing(target ? anchor : null);
+  spotlight.classList.toggle("framed", ringShown);
 }
 
-// The arrow starts on the card edge that faces the anchor and stops just short of it.
+// The arrow starts on the card edge that faces the aim box (the ring, or the spotlight) and stops
+// just short of that box's edge - never on top of the element it points at. No arrow at all when
+// the card is adjacent or overlaps the box: the ring or spotlight already says it.
 function positionTutorialArrow(anchor, card, arrow) {
   if (!arrow) return;
-  const c = card.getBoundingClientRect();
-  const inside = anchor && anchor.x >= c.left && anchor.x <= c.right && anchor.y >= c.top && anchor.y <= c.bottom;
-  if (!anchor || inside) {
+  if (!anchor) {
     arrow.hidden = true;
     return;
   }
+  const c = card.getBoundingClientRect();
   let startX;
   let startY;
   if (anchor.x > c.right) {
@@ -1101,12 +1251,16 @@ function positionTutorialArrow(anchor, card, arrow) {
   const deltaX = anchor.x - startX;
   const deltaY = anchor.y - startY;
   const distance = Math.hypot(deltaX, deltaY);
-  // The card sits right next to the anchor: the ring says it all, a 3 px arrow says nothing.
-  if (distance < 34) {
+  const box = anchor.rect;
+  // Where the start-to-centre segment enters the aim box (slab test): the tip stops there.
+  const entryX = deltaX > 0 ? (box.left - startX) / deltaX : deltaX < 0 ? (box.right - startX) / deltaX : -Infinity;
+  const entryY = deltaY > 0 ? (box.top - startY) / deltaY : deltaY < 0 ? (box.bottom - startY) / deltaY : -Infinity;
+  const entry = Math.max(entryX, entryY);
+  const length = Number.isFinite(entry) ? entry * distance - 6 : distance - 6;
+  if (!(entry > 0) || length < 28) {
     arrow.hidden = true;
     return;
   }
-  const length = Math.max(24, distance - (anchor.sub ? 10 : 16));
   arrow.hidden = false;
   arrow.style.left = `${startX}px`;
   arrow.style.top = `${startY}px`;
@@ -1114,9 +1268,9 @@ function positionTutorialArrow(anchor, card, arrow) {
   arrow.style.transform = `rotate(${Math.atan2(deltaY, deltaX) * 180 / Math.PI}deg)`;
 }
 
-// On a large target the spotlight frames the whole panel, so a ring marks the exact element
-// (or point) the step is about.
-function positionTutorialAnchorRing(anchor, rect) {
+// A ring marks the exact element a step is about inside a large spotlight. Returns whether it
+// is shown.
+function positionTutorialAnchorRing(anchor) {
   const overlay = $("tutorialOverlay");
   let ring = document.getElementById("tutorialAnchorRing");
   if (!ring) {
@@ -1126,21 +1280,15 @@ function positionTutorialAnchorRing(anchor, rect) {
     ring.setAttribute("aria-hidden", "true");
     overlay.appendChild(ring);
   }
-  const show = Boolean(anchor) && tutorialTargetIsLarge(rect);
+  const show = Boolean(anchor?.sub);
   ring.hidden = !show;
-  if (!show) return;
-  if (anchor.sub) {
-    const r = anchor.rect;
-    ring.style.left = `${r.left - 6}px`;
-    ring.style.top = `${r.top - 6}px`;
-    ring.style.width = `${Math.min(r.width + 12, 460)}px`;
-    ring.style.height = `${Math.min(r.height + 12, 140)}px`;
-  } else {
-    ring.style.left = `${anchor.x - 14}px`;
-    ring.style.top = `${anchor.y - 14}px`;
-    ring.style.width = "28px";
-    ring.style.height = "28px";
-  }
+  if (!show) return false;
+  const r = anchor.rect;
+  ring.style.left = `${r.left}px`;
+  ring.style.top = `${r.top}px`;
+  ring.style.width = `${r.width}px`;
+  ring.style.height = `${r.height}px`;
+  return true;
 }
 
 // Arrow keys step through the tutorial; typing in a field is left alone.

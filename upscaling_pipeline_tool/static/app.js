@@ -1832,6 +1832,12 @@
         glycerol: { name: "glycerol", pubchemQuery: "glycerol", pubchemCid: "753", molecularFormula: "C3H8O3", mw: "92.09", tb: "563", tm: "291.3", pvap: "0.022", density: "1261", phase: "L" },
         water: { name: "water", pubchemQuery: "water", pubchemCid: "962", molecularFormula: "H2O", mw: "18.015", tb: "373.15", tm: "273.15", pvap: "3170", density: "997", phase: "L" }
       };
+      Object.values(chem).forEach(entry => {
+        entry.propertyStatus = "database";
+        entry.propertySource = "NIST WebBook / CRC Handbook of Chemistry and Physics (97th ed.) values at 25 degC; identity and formula from PubChem";
+      });
+      chem.fame.propertyStatus = "estimated";
+      chem.fame.propertySource = "PubChem identity; Tb 622 K is a Clausius-Clapeyron extrapolation (methyl oleate decomposes before boiling at 1 atm), Tm and density from CRC";
       const sub = (role, key, overrides = {}) => ({ role, ...chem[key], scalingMode: "per kg product", ...overrides });
       const internal = streams => streams.map(stream => ({ ...stream, internalTransfer: true }));
       const makeBlock = (id, groupId, behavior, phenomena, streams, conditions = {}, conditionUnits = {}, source = "protocol") => {
@@ -1857,101 +1863,106 @@
         };
       };
       const cite = "Freedman et al. 1984; Van Gerpen 2005";
+      // Every quantified row says where its number comes from: the two papers and the standard
+      // for what they report, an explicit engineering-estimate note for everything else.
+      const literature = citations.biodieselLiterature;
+      const estimate = citations.biodieselEstimate;
+      const derived = citations.biodieselDerived;
 
       state.text = text;
       $("sourceInput").value = text;
       state.blocks = [
         makeBlock("B1", "G1", "charge and mix", ["M(L)", "2phM(LS)"], [
-          sub("input", "methanol", { quantity: "0.1114", unit: "kg", status: "calculated", timing: "make-up", fate: "fresh input", reactionRole: "reactant", stoichCoeff: "3", note: `Make-up methanol: 6:1 molar charge (0.2171 kg) minus the 0.1057 kg recovered from the ester phase and the glycerol phase (${cite}).` }),
-          sub("input", "methanol", { quantity: "0.1057", unit: "kg", status: "calculated", timing: "recycle", fate: "recycled input", reactionRole: "reactant", stoichCoeff: "3", scalingMode: "recycle loop", loopId: "MEOH", note: "Recovered methanol returned from the ester-phase flash (G4) and the glycerol-phase column (G7), 95% recovery each." }),
-          sub("input", "naoh", { quantity: "0.010", unit: "kg", status: "reported", timing: "initial charge", fate: "fresh input", reactionRole: "catalyst", note: `1 wt% NaOH on oil (${cite}).` }),
-          sub("output", "methanol", { quantity: "0.2171", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "reactant", stoichCoeff: "3", destinationGroup: "G2", note: "6 mol methanol per mol triolein: 6 x 1.1294 mol x 32.04 g/mol." }),
-          sub("output", "naoh", { quantity: "0.010", unit: "kg", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", destinationGroup: "G2", phase: "L", note: "Dissolved as sodium methoxide." })
+          sub("input", "methanol", { source: literature, quantity: "0.1114", unit: "kg", status: "calculated", timing: "make-up", fate: "fresh input", reactionRole: "reactant", stoichCoeff: "3", note: `Make-up methanol: 6:1 molar charge (0.2171 kg) minus the 0.1057 kg recovered from the ester phase and the glycerol phase (${cite}).` }),
+          sub("input", "methanol", { source: derived, quantity: "0.1057", unit: "kg", status: "calculated", timing: "recycle", fate: "recycled input", reactionRole: "reactant", stoichCoeff: "3", scalingMode: "recycle loop", loopId: "MEOH", note: "Recovered methanol returned from the ester-phase flash (G4) and the glycerol-phase column (G7), 95% recovery each." }),
+          sub("input", "naoh", { source: literature, quantity: "0.010", unit: "kg", status: "reported", timing: "initial charge", fate: "fresh input", reactionRole: "catalyst", note: `1 wt% NaOH on oil (${cite}).` }),
+          sub("output", "methanol", { source: derived, quantity: "0.2171", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "reactant", stoichCoeff: "3", destinationGroup: "G2", note: "6 mol methanol per mol triolein: 6 x 1.1294 mol x 32.04 g/mol." }),
+          sub("output", "naoh", { source: literature, quantity: "0.010", unit: "kg", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", destinationGroup: "G2", phase: "L", note: "Dissolved as sodium methoxide." })
         ], { initial_temperature: "25", mixing_time: "0.25", agitation_note: "dissolve NaOH in methanol with stirring; exothermic, keep below 40 °C" },
            { initial_temperature: "°C", mixing_time: "h" }),
         makeBlock("B2", "G2", "reaction", ["M(L)", "R(L)", "ES(H)"], [
-          sub("input", "oil", { quantity: "1.000", unit: "kg", status: "reported", timing: "initial charge", fate: "fresh input", reactionRole: "reactant", stoichCoeff: "1", note: "Refined vegetable oil on a triolein basis: 1.1294 mol." }),
-          sub("input", "methanol", { quantity: "0.2171", unit: "kg", status: "calculated", timing: "later addition", fate: "intermediate", reactionRole: "reactant", stoichCoeff: "3", note: "Methoxide solution from G1." }),
-          sub("input", "naoh", { quantity: "0.010", unit: "kg", status: "reported", timing: "later addition", fate: "intermediate", reactionRole: "catalyst", phase: "L", note: "Dissolved in the methoxide solution." }),
-          sub("output", "fame", { quantity: "0.9795", conversionBaseQuantity: "1.0046", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "product", stoichCoeff: "3", destinationGroup: "G3", note: `3 mol methyl oleate per mol triolein at 97.5% conversion; theoretical 1.0046 kg (${cite}).` }),
-          sub("output", "glycerol", { quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "co-product", substanceRole: "byproduct", stoichCoeff: "1", destinationGroup: "G3", note: "1 mol glycerol per mol triolein converted." }),
-          sub("output", "methanol", { quantity: "0.1113", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol", destinationGroup: "G3", note: "Excess methanol: 0.2171 kg charged minus 0.1058 kg consumed." }),
-          sub("output", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein", destinationGroup: "G3", note: "Unconverted glycerides at 97.5% conversion; mono- and diglycerides in practice." }),
-          sub("output", "naoh", { quantity: "0.010", unit: "kg", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", destinationGroup: "G3", phase: "L" })
+          sub("input", "oil", { source: literature, quantity: "1.000", unit: "kg", status: "reported", timing: "initial charge", fate: "fresh input", reactionRole: "reactant", stoichCoeff: "1", note: "Refined vegetable oil on a triolein basis: 1.1294 mol." }),
+          sub("input", "methanol", { source: derived, quantity: "0.2171", unit: "kg", status: "calculated", timing: "later addition", fate: "intermediate", reactionRole: "reactant", stoichCoeff: "3", note: "Methoxide solution from G1." }),
+          sub("input", "naoh", { source: literature, quantity: "0.010", unit: "kg", status: "reported", timing: "later addition", fate: "intermediate", reactionRole: "catalyst", phase: "L", note: "Dissolved in the methoxide solution." }),
+          sub("output", "fame", { source: literature, quantity: "0.9795", conversionBaseQuantity: "1.0046", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "product", stoichCoeff: "3", destinationGroup: "G3", note: `3 mol methyl oleate per mol triolein at 97.5% conversion; theoretical 1.0046 kg (${cite}).` }),
+          sub("output", "glycerol", { source: derived, quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "co-product", substanceRole: "byproduct", stoichCoeff: "1", destinationGroup: "G3", note: "1 mol glycerol per mol triolein converted." }),
+          sub("output", "methanol", { source: derived, quantity: "0.1113", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol", destinationGroup: "G3", note: "Excess methanol: 0.2171 kg charged minus 0.1058 kg consumed." }),
+          sub("output", "oil", { source: derived, quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein", destinationGroup: "G3", note: "Unconverted glycerides at 97.5% conversion; mono- and diglycerides in practice." }),
+          sub("output", "naoh", { source: literature, quantity: "0.010", unit: "kg", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", destinationGroup: "G3", phase: "L" })
         ], { initial_temperature: "25", target_temperature: "60", holding_temperature: "60", thermal_ramp: "0.5", reaction_time: "1", agitation_speed: "600", conversion_yield: "97.5", initial_pressure: "1", thermal_mode: "jacket heating, atmospheric reflux condenser", transfer_endpoint: "ester content >= 96.5 % by mass (EN 14214)" },
            { initial_temperature: "°C", target_temperature: "°C", holding_temperature: "°C", thermal_ramp: "h", reaction_time: "h", agitation_speed: "rpm", conversion_yield: "%", initial_pressure: "bar" }),
         makeBlock("B3", "G3", "liquid-liquid wash", ["2phM(LL)", "PT(LL)", "PS(LL)"], [
-          sub("input", "fame", { quantity: "0.9795", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate" }),
-          sub("input", "glycerol", { quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", substanceRole: "byproduct" }),
-          sub("input", "methanol", { quantity: "0.1113", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol" }),
-          sub("input", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" }),
-          sub("input", "naoh", { quantity: "0.010", unit: "kg", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", phase: "L" }),
-          sub("output", "fame", { quantity: "0.9795", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G4", note: "Upper ester phase (density 874 kg/m3)." }),
-          sub("output", "methanol", { quantity: "0.0413", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol", destinationGroup: "G4", note: "About 37% of the excess methanol stays in the ester phase; typical partition, verify by GC." }),
-          sub("output", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein", destinationGroup: "G4" }),
-          sub("output", "glycerol", { quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "co-product", substanceRole: "byproduct", destinationGroup: "G7", note: "Lower glycerol-rich phase (density 1261 kg/m3)." }),
-          sub("output", "methanol", { quantity: "0.0700", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol", destinationGroup: "G7", note: "About 63% of the excess methanol leaves with the glycerol phase; typical partition, verify by GC." }),
-          sub("output", "naoh", { quantity: "0.010", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", destinationGroup: "G7", phase: "L", note: "Catalyst follows the polar glycerol phase." })
+          sub("input", "fame", { source: derived, quantity: "0.9795", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate" }),
+          sub("input", "glycerol", { source: derived, quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", substanceRole: "byproduct" }),
+          sub("input", "methanol", { source: derived, quantity: "0.1113", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol" }),
+          sub("input", "oil", { source: derived, quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" }),
+          sub("input", "naoh", { source: literature, quantity: "0.010", unit: "kg", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", phase: "L" }),
+          sub("output", "fame", { source: derived, quantity: "0.9795", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G4", note: "Upper ester phase (density 874 kg/m3)." }),
+          sub("output", "methanol", { source: estimate, quantity: "0.0413", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol", destinationGroup: "G4", note: "About 37% of the excess methanol stays in the ester phase; typical partition, verify by GC." }),
+          sub("output", "oil", { source: derived, quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein", destinationGroup: "G4" }),
+          sub("output", "glycerol", { source: derived, quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "co-product", substanceRole: "byproduct", destinationGroup: "G7", note: "Lower glycerol-rich phase (density 1261 kg/m3)." }),
+          sub("output", "methanol", { source: estimate, quantity: "0.0700", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol", destinationGroup: "G7", note: "About 63% of the excess methanol leaves with the glycerol phase; typical partition, verify by GC." }),
+          sub("output", "naoh", { source: estimate, quantity: "0.010", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", destinationGroup: "G7", phase: "L", note: "Catalyst follows the polar glycerol phase." })
         ], { holding_temperature: "50", settling_time: "1.5", phase_ratio: "about 0.18 kg glycerol phase per kg oil", agitation_note: "no agitation; gravity settling of the two liquid phases", transfer_endpoint: "lower glycerol-rich phase drawn off; sharp interface" },
            { holding_temperature: "°C", settling_time: "h" }),
         makeBlock("B4", "G4", "solvent evaporation", ["ES(H)", "PT(VL)", "PS(VL)"], [
-          sub("input", "fame", { quantity: "0.9795", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate" }),
-          sub("input", "methanol", { quantity: "0.0413", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol" }),
-          sub("input", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" }),
-          sub("output", "methanol", { quantity: "0.0392", unit: "kg", status: "estimated", timing: "recycle", fate: "recovered solvent", destinationGroup: "G1", recoveryPercent: "95", scalingMode: "recycle loop", loopId: "MEOH", note: "Condensed overhead returned to methoxide preparation; 95% recovery assumed." }),
-          sub("waste", "methanol", { quantity: "0.0021", unit: "kg", status: "estimated", timing: "vent/emission", fate: "vent", phase: "V", note: "Uncondensed methanol vapour at 200 mbar; 5% of the ester-phase methanol." }),
-          sub("output", "fame", { quantity: "0.9795", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G5" }),
-          sub("output", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein", destinationGroup: "G5" })
+          sub("input", "fame", { source: derived, quantity: "0.9795", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate" }),
+          sub("input", "methanol", { source: estimate, quantity: "0.0413", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol" }),
+          sub("input", "oil", { source: derived, quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" }),
+          sub("output", "methanol", { source: estimate, quantity: "0.0392", unit: "kg", status: "estimated", timing: "recycle", fate: "recovered solvent", destinationGroup: "G1", recoveryPercent: "95", scalingMode: "recycle loop", loopId: "MEOH", note: "Condensed overhead returned to methoxide preparation; 95% recovery assumed." }),
+          sub("waste", "methanol", { source: estimate, quantity: "0.0021", unit: "kg", status: "estimated", timing: "vent/emission", fate: "vent", phase: "V", note: "Uncondensed methanol vapour at 200 mbar; 5% of the ester-phase methanol." }),
+          sub("output", "fame", { source: derived, quantity: "0.9795", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G5" }),
+          sub("output", "oil", { source: derived, quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein", destinationGroup: "G5" })
         ], { target_temperature: "70", target_pressure: "200", phase_change_time: "1", thermal_mode: "jacketed still with condenser under vacuum", transfer_endpoint: "methanol below 0.2 % in the ester phase (EN 14214)" },
            { target_temperature: "°C", target_pressure: "mbar", phase_change_time: "h" }),
         makeBlock("B5", "G5", "liquid-liquid wash", ["2phM(LL)", "PT(LL)", "PS(LL)"], [
-          sub("input", "fame", { quantity: "0.9795", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate" }),
-          sub("input", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" }),
-          sub("input", "water", { quantity: "0.9", unit: "L", status: "reported", timing: "later addition", fate: "fresh input", reactionRole: "auxiliary", note: "Three washes of 0.3 L warm water per kg ester (Van Gerpen 2005)." }),
-          sub("output", "fame", { quantity: "0.9746", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6", note: "0.5% ester loss to the wash water assumed." }),
-          sub("output", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein", destinationGroup: "G6" }),
-          sub("output", "water", { quantity: "0.0050", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6", note: "Water entrained in the washed ester, about 0.5 wt%." }),
-          sub("waste", "water", { quantity: "0.9", unit: "L", status: "reported", timing: "waste purge", fate: "wastewater", destinationGroup: "G8", note: "Spent wash water with soaps, residual methanol and glycerol." }),
-          sub("waste", "fame", { quantity: "0.0049", unit: "kg", status: "estimated", timing: "waste purge", fate: "loss", destinationGroup: "G8", note: "Ester lost to the wash water (0.5%)." })
+          sub("input", "fame", { source: derived, quantity: "0.9795", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate" }),
+          sub("input", "oil", { source: derived, quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" }),
+          sub("input", "water", { source: literature, quantity: "0.9", unit: "L", status: "reported", timing: "later addition", fate: "fresh input", reactionRole: "auxiliary", note: "Three washes of 0.3 L warm water per kg ester (Van Gerpen 2005)." }),
+          sub("output", "fame", { source: estimate, quantity: "0.9746", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6", note: "0.5% ester loss to the wash water assumed." }),
+          sub("output", "oil", { source: derived, quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein", destinationGroup: "G6" }),
+          sub("output", "water", { source: estimate, quantity: "0.0050", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6", note: "Water entrained in the washed ester, about 0.5 wt%." }),
+          sub("waste", "water", { source: literature, quantity: "0.9", unit: "L", status: "reported", timing: "waste purge", fate: "wastewater", destinationGroup: "G8", note: "Spent wash water with soaps, residual methanol and glycerol." }),
+          sub("waste", "fame", { source: estimate, quantity: "0.0049", unit: "kg", status: "estimated", timing: "waste purge", fate: "loss", destinationGroup: "G8", note: "Ester lost to the wash water (0.5%)." })
         ], { holding_temperature: "50", settling_time: "0.5", phase_ratio: "3 x 0.3 L water per kg ester", agitation_note: "gentle stirring during water addition, then settle; vigorous mixing emulsifies", transfer_endpoint: "wash water neutral; no soap; clear ester phase" },
            { holding_temperature: "°C", settling_time: "h" }),
         makeBlock("B6", "G6", "solvent evaporation", ["ES(H)", "PT(VL)", "PS(VL)"], [
-          sub("input", "fame", { quantity: "0.9746", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate" }),
-          sub("input", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" }),
-          sub("input", "water", { quantity: "0.0050", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate" }),
+          sub("input", "fame", { source: estimate, quantity: "0.9746", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate" }),
+          sub("input", "oil", { source: derived, quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" }),
+          sub("input", "water", { source: estimate, quantity: "0.0050", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate" }),
           ...internal([
-            sub("output", "fame", { quantity: "0.9746", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate" }),
-            sub("output", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" })
+            sub("output", "fame", { source: estimate, quantity: "0.9746", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate" }),
+            sub("output", "oil", { source: derived, quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" })
           ]),
-          sub("waste", "water", { quantity: "0.0050", unit: "kg", status: "estimated", timing: "waste purge", fate: "wastewater", destinationGroup: "G8", phase: "V", note: "Water vapour drawn off under vacuum, condensed and sent to wastewater." })
+          sub("waste", "water", { source: estimate, quantity: "0.0050", unit: "kg", status: "estimated", timing: "waste purge", fate: "wastewater", destinationGroup: "G8", phase: "V", note: "Water vapour drawn off under vacuum, condensed and sent to wastewater." })
         ], { target_temperature: "105", target_pressure: "50", phase_change_time: "0.5", thermal_mode: "vacuum drying with condenser", transfer_endpoint: "water < 500 mg/kg (EN 14214)" },
            { target_temperature: "°C", target_pressure: "mbar", phase_change_time: "h" }),
         makeBlock("B7", "G6", "filtration", ["PS(LS)"], [
           ...internal([
-            sub("input", "fame", { quantity: "0.9746", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate" }),
-            sub("input", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" })
+            sub("input", "fame", { source: estimate, quantity: "0.9746", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate" }),
+            sub("input", "oil", { source: derived, quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" })
           ]),
-          sub("output", "fame", { quantity: "0.9736", unit: "kg", status: "estimated", timing: "final output", fate: "product", note: "Biodiesel (FAME) product; ester content 97.5 % by mass with the residual glycerides, within EN 14214." }),
-          sub("output", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "final output", fate: "product", residualOf: "triolein", note: "Residual glycerides leaving with the product, within the EN 14214 limits." }),
+          sub("output", "fame", { source: literature, quantity: "0.9736", unit: "kg", status: "estimated", timing: "final output", fate: "product", note: "Biodiesel (FAME) product. Ester content 97.5 % by mass passes the EN 14214 floor of 96.5 %, but the 2.5 % residual triglyceride carried with it exceeds the EN 14214 triglyceride limit of 0.20 % m/m: a higher conversion or a glyceride-removal step is needed before this product meets the standard." }),
+          sub("output", "oil", { source: literature, quantity: "0.0250", unit: "kg", status: "calculated", timing: "final output", fate: "product", residualOf: "triolein", note: "Residual glycerides leaving with the product. At 2.5 % m/m this exceeds the EN 14214 triglyceride limit of 0.20 % m/m; the demo stops at the laboratory conversion and does not add the extra separation." }),
           { role: "waste", name: "filter residue", quantity: "0.0010", unit: "kg", phase: "S", status: "estimated", timing: "waste purge", fate: "solid waste", scalingMode: "per kg product", note: "Soaps and particulates retained on the 5 micrometre filter, about 0.1 % of the ester." }
         ], { contact_device: "5 µm polishing filter", transfer_endpoint: "clear ester; ester content >= 96.5 % (EN 14214)" }, {}),
         makeBlock("B8", "G7", "solvent recovery distillation", ["M(L)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"], [
-          sub("input", "glycerol", { quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", substanceRole: "byproduct" }),
-          sub("input", "methanol", { quantity: "0.0700", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol" }),
-          sub("input", "naoh", { quantity: "0.010", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", phase: "L" }),
-          sub("output", "methanol", { quantity: "0.0665", unit: "kg", status: "estimated", timing: "recycle", fate: "recovered solvent", destinationGroup: "G1", recoveryPercent: "95", scalingMode: "recycle loop", loopId: "MEOH", note: "Overhead methanol returned to methoxide preparation; 95% recovery assumed." }),
-          sub("waste", "methanol", { quantity: "0.0035", unit: "kg", status: "estimated", timing: "vent/emission", fate: "vent", phase: "V", note: "Uncondensed methanol vapour, 5 %." }),
-          sub("output", "glycerol", { quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "co-product", substanceRole: "byproduct", destinationGroup: "G8", note: "Crude glycerol bottoms to neutralization and valorization." }),
-          sub("output", "naoh", { quantity: "0.010", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", destinationGroup: "G8", phase: "L" })
+          sub("input", "glycerol", { source: derived, quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", substanceRole: "byproduct" }),
+          sub("input", "methanol", { source: estimate, quantity: "0.0700", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol" }),
+          sub("input", "naoh", { source: estimate, quantity: "0.010", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", phase: "L" }),
+          sub("output", "methanol", { source: estimate, quantity: "0.0665", unit: "kg", status: "estimated", timing: "recycle", fate: "recovered solvent", destinationGroup: "G1", recoveryPercent: "95", scalingMode: "recycle loop", loopId: "MEOH", note: "Overhead methanol returned to methoxide preparation; 95% recovery assumed." }),
+          sub("waste", "methanol", { source: estimate, quantity: "0.0035", unit: "kg", status: "estimated", timing: "vent/emission", fate: "vent", phase: "V", note: "Uncondensed methanol vapour, 5 %." }),
+          sub("output", "glycerol", { source: derived, quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "co-product", substanceRole: "byproduct", destinationGroup: "G8", note: "Crude glycerol bottoms to neutralization and valorization." }),
+          sub("output", "naoh", { source: estimate, quantity: "0.010", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", destinationGroup: "G8", phase: "L" })
         ], { target_temperature: "70", target_pressure: "1000", separation_efficiency: "95", agitation_note: "reboiler circulation; no mechanical agitation", transfer_endpoint: "methanol recovery >= 95 %" },
            { target_temperature: "°C", target_pressure: "mbar", separation_efficiency: "%" }, "scale-up addition"),
         makeBlock("B9", "G8", "wastewater interface", ["PS(LL)"], [
-          sub("input", "glycerol", { quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", substanceRole: "byproduct" }),
-          sub("input", "naoh", { quantity: "0.010", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", phase: "L" }),
-          sub("input", "water", { quantity: "0.9", unit: "L", status: "reported", timing: "in-process intermediate", fate: "wastewater" }),
-          sub("input", "water", { quantity: "0.0050", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "wastewater" }),
-          sub("input", "fame", { quantity: "0.0049", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "loss" }),
-          sub("output", "glycerol", { quantity: "0.1014", unit: "kg", status: "calculated", timing: "final output", fate: "co-product", substanceRole: "byproduct", note: "Crude glycerol (about 80 % after neutralization) sold for refining." }),
+          sub("input", "glycerol", { source: derived, quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", substanceRole: "byproduct" }),
+          sub("input", "naoh", { source: estimate, quantity: "0.010", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", phase: "L" }),
+          sub("input", "water", { source: literature, quantity: "0.9", unit: "L", status: "reported", timing: "in-process intermediate", fate: "wastewater" }),
+          sub("input", "water", { source: estimate, quantity: "0.0050", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "wastewater" }),
+          sub("input", "fame", { source: estimate, quantity: "0.0049", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "loss" }),
+          sub("output", "glycerol", { source: derived, quantity: "0.1014", unit: "kg", status: "calculated", timing: "final output", fate: "co-product", substanceRole: "byproduct", note: "Crude glycerol (about 80 % after neutralization) sold for refining." }),
           { role: "waste", name: "wastewater", quantity: "0.917", unit: "kg", phase: "L", density: "1000", status: "estimated", timing: "waste purge", fate: "wastewater", scalingMode: "per kg product", note: "Wash water and drying condensate with the neutralized catalyst salts, soaps and traces of ester: 0.897 + 0.005 + 0.005 + 0.010 kg." }
         ], { agitation_note: "acid neutralization of the crude glycerol phase; wash water to biological treatment" }, {}, "scale-up addition")
       ];
@@ -2074,7 +2085,7 @@
         normalizeSeparationSubstance({ ...common, id: "CS1", name: "methyl oleate", role: "product", phase: "L", fate: "product", quantity: "0.9795", unit: "kg", stoichCoeff: "3", pubchemCid: "5364509", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/5364509", molecularFormula: "C19H36O2", canonicalSmiles: "CCCCCCCCC=CCCCCCCCC(=O)OC", exactMass: "296.2715", propertyStatus: "database", thermalSensitivity: "medium", mw: "296.49", tb: "622", tm: "253.3", pvap: "0.0002", solubilityParameter: "17.0", molarVolume: "339", criticalTemp: "764", note: "Fatty acid methyl ester; normal boiling point extrapolated (218 degC at 20 mmHg); vapour pressure at 25 degC is an EPI Suite estimate; oxidation-sensitive." }),
         normalizeSeparationSubstance({ ...common, id: "CS2", name: "glycerol", role: "byproduct", phase: "L", fate: "recover", quantity: "0.1014", unit: "kg", stoichCoeff: "1", pubchemCid: "753", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/753", molecularFormula: "C3H8O3", canonicalSmiles: "C(C(CO)O)O", xlogp: "-1.8", exactMass: "92.0473", propertyStatus: "database", thermalSensitivity: "low", mw: "92.09", tb: "563", tm: "291.3", pvap: "0.022", solubilityParameter: "36.1", molarVolume: "73.0", criticalTemp: "850", note: "Immiscible with the ester phase; recovered as crude glycerol co-product." }),
         normalizeSeparationSubstance({ ...common, id: "CS3", name: "methanol", role: "solvent", phase: "L", fate: "recycle", quantity: "0.1113", unit: "kg", reactionFeedQuantity: "0.2171", reactionFeedUnit: "kg", residualOf: "methanol", residualSourceId: "B2-S2", stoichCoeff: "3", pubchemCid: "887", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/887", molecularFormula: "CH4O", canonicalSmiles: "CO", xlogp: "-0.5", exactMass: "32.0262", propertyStatus: "database", thermalSensitivity: "low", mw: "32.04", tb: "337.8", tm: "175.6", pvap: "16900", solubilityParameter: "29.6", molarVolume: "40.5", criticalTemp: "512.6", note: "Excess reagent after 97.5% conversion; recovered by flash/distillation and recycled." }),
-        normalizeSeparationSubstance({ ...common, id: "CS4", name: "triolein", role: "reactant", phase: "L", fate: "keep with mixture", quantity: "0.0250", unit: "kg", reactionFeedQuantity: "1.000", reactionFeedUnit: "kg", residualOf: "triolein", residualSourceId: "B2-S1", stoichCoeff: "1", pubchemCid: "5497163", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/5497163", molecularFormula: "C57H104O6", exactMass: "884.7833", propertyStatus: "estimated", thermalSensitivity: "medium", mw: "885.43", tm: "278", pvap: "0.000001", solubilityParameter: "16.0", molarVolume: "973", note: "Unconverted glycerides; stay with the ester within the EN 14214 limits. No measurable normal boiling point (decomposes); vapour pressure entered as negligible." }),
+        normalizeSeparationSubstance({ ...common, id: "CS4", name: "triolein", role: "reactant", phase: "L", fate: "keep with mixture", quantity: "0.0250", unit: "kg", reactionFeedQuantity: "1.000", reactionFeedUnit: "kg", residualOf: "triolein", residualSourceId: "B2-S1", stoichCoeff: "1", pubchemCid: "5497163", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/5497163", molecularFormula: "C57H104O6", exactMass: "884.7833", propertyStatus: "estimated", thermalSensitivity: "medium", mw: "885.43", tm: "278", pvap: "0.000001", solubilityParameter: "16.0", molarVolume: "973", note: "Unconverted glycerides; stay with the ester in this demo. EN 14214 limits triglyceride to 0.20 % m/m, so 2.5 % would need a further separation or a higher conversion. No measurable normal boiling point (decomposes); vapour pressure entered as negligible." }),
         normalizeSeparationSubstance({ ...common, id: "CS5", name: "sodium hydroxide", role: "catalyst", phase: "L", fate: "waste", quantity: "0.010", unit: "kg", pubchemCid: "14798", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/14798", molecularFormula: "HNaO", exactMass: "39.9925", propertyStatus: "database", thermalSensitivity: "low", mw: "40.00", tb: "1661", tm: "596", note: "Base catalyst dissolved in methanol; follows the glycerol phase and is neutralized." })
       ];
       simulator.reactionBalance = normalizeReactionBalance({
@@ -2093,7 +2104,7 @@
       simulator.pairInsights = {
         [separationPairKey("CS1", "CS2")]: insight("Glycerol is immiscible with the methyl ester and settles as the dense lower phase (1261 against 874 kg/m3); decanting is standard practice.", { miscibilityGap: "yes", azeotrope: "no" }),
         [separationPairKey("CS1", "CS3")]: insight("Methanol/methyl oleate: no azeotrope; screening volatility ratio from the 298.15 K vapour pressures (methyl oleate value is an EPI Suite estimate).", { azeotrope: "no", miscibilityGap: "no", relativeVolatility: "8.5e7" }),
-        [separationPairKey("CS1", "CS4")]: insight("Unconverted glycerides stay dissolved in the ester and are tolerated by EN 14214; no split is sought.", { miscibilityGap: "no", azeotrope: "no" }),
+        [separationPairKey("CS1", "CS4")]: insight("Unconverted glycerides stay dissolved in the ester; no split is sought in this demo, although at 2.5 % m/m they exceed the EN 14214 triglyceride limit of 0.20 % m/m.", { miscibilityGap: "no", azeotrope: "no" }),
         [separationPairKey("CS1", "CS5")]: insight("The base catalyst is insoluble in the ester phase and follows the glycerol phase.", { miscibilityGap: "yes" }),
         [separationPairKey("CS2", "CS3")]: insight("Methanol and glycerol are fully miscible; methanol is stripped from the glycerol phase by distillation.", { azeotrope: "no", miscibilityGap: "no" }),
         [separationPairKey("CS2", "CS4")]: insight("Glycerol and oil are immiscible.", { miscibilityGap: "yes" }),
@@ -3023,7 +3034,7 @@
           siblings.some(item => state.selectedBlockId === item.id) ? "primary-selected" : ""
         ].filter(Boolean).join(" ");
         const extraLabel = siblings.length > 1 ? ` <span class="pill" title="${escapeAttr(siblings.slice(1).map(item => item.id).join(", "))} share this same text (e.g. parallel-unit copies) — manage them on the board">+${siblings.length - 1}</span>` : "";
-        html += `<span class="${classes}" data-block-id="${block.id}" title="${escapeAttr(siblings.map(item => item.id).join(", "))} / ${escapeAttr(block.groupId || "ungrouped")}"><span class="annotated-block-label">${escapeHtml(block.id)}${extraLabel}</span><button class="annotated-block-delete" data-delete-block="${escapeAttr(block.id)}" title="Delete ${escapeAttr(block.id)}" aria-label="Delete ${escapeAttr(block.id)}">x</button>${escapeHtml(state.text.slice(block.start, block.end))}</span>`;
+        html += `<span class="${classes}" data-block-id="${escapeAttr(block.id)}" title="${escapeAttr(siblings.map(item => item.id).join(", "))} / ${escapeAttr(block.groupId || "ungrouped")}"><span class="annotated-block-label">${escapeHtml(block.id)}${extraLabel}</span><button class="annotated-block-delete" data-delete-block="${escapeAttr(block.id)}" title="Delete ${escapeAttr(block.id)}" aria-label="Delete ${escapeAttr(block.id)}">x</button>${escapeHtml(state.text.slice(block.start, block.end))}</span>`;
         cursor = block.end;
       }
       html += escapeHtml(state.text.slice(cursor));
@@ -3963,10 +3974,10 @@
       const sourcePill = sourceMeta.label === "protocol" ? "" : `<span class="pill">${escapeHtml(sourceMeta.label)}</span>`;
       const needsTask = !block.groupId;
       return `
-        <article class="block-card tip ${state.selectedBlockId === block.id ? "selected" : ""} ${state.selectedIds.includes(block.id) ? "multi" : ""} ${state.connectingFrom === block.id ? "connecting" : ""} ${needsTask ? "needs-task" : ""}" data-block-card="${block.id}" data-tip="${escapeAttr(blockContentsTip(block))}">
+        <article class="block-card tip ${state.selectedBlockId === block.id ? "selected" : ""} ${state.selectedIds.includes(block.id) ? "multi" : ""} ${state.connectingFrom === block.id ? "connecting" : ""} ${needsTask ? "needs-task" : ""}" data-block-card="${escapeAttr(block.id)}" data-tip="${escapeAttr(blockContentsTip(block))}">
           ${needsTask ? `<span class="connect-handle" data-connect-handle="${escapeAttr(block.id)}" title="Drag to another block or group to connect them"></span>` : ""}
           <div class="row between block-card-head">
-            <strong>${block.id}</strong>
+            <strong>${escapeHtml(block.id)}</strong>
             <div class="row" style="gap:4px">
               ${sourcePill}
               <span class="pill accent">${escapeHtml(block.behavior)}</span>
@@ -4841,13 +4852,36 @@
       return effectiveBatchDurationH(basis);
     }
 
-    function effectiveBatchesPerYear(basis) {
-      if (basis.scheduleMethod === "batches_per_day") return NaN;
+    // Calendar / cycle time x OEE x trains.
+    function cycleBatchesPerYear(basis) {
       const duration = planningCycleTimeH(basis);
       const productiveHours = annualProductiveHours(basis);
       const parallel = parseStreamQuantity(basis.parallelUnits);
       if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(productiveHours) || productiveHours <= 0 || !Number.isFinite(parallel) || parallel <= 0) return NaN;
       return productiveHours * parallel / duration;
+    }
+
+    // Batches/day x operating days: a plant-level figure as the user declares it, so parallel
+    // trains are not applied on top of it.
+    function calendarBatchesPerYear(basis) {
+      const batchesPerDay = parseStreamQuantity(basis.batchesPerDay);
+      const operatingDays = parseStreamQuantity(basis.operatingDays);
+      if (!Number.isFinite(batchesPerDay) || batchesPerDay <= 0 || !Number.isFinite(operatingDays) || operatingDays <= 0) return NaN;
+      return batchesPerDay * operatingDays;
+    }
+
+    // Which annual-batches calculation is in use: the method selected, or on Auto the cycle-time
+    // method when a duration exists and batches/day otherwise. The method used to be inferred
+    // from whether the cycle-time figure existed, so selecting Batches/day reported the annual
+    // batches as missing while the production-schedule rows still showed cycle-time figures.
+    function scheduleMethodInUse(basis) {
+      if (basis.scheduleMethod === "batches_per_day") return "batches_per_day_days_per_year";
+      if (basis.scheduleMethod === "duration") return "duration_OEE_parallel_units";
+      return Number.isFinite(cycleBatchesPerYear(basis)) ? "duration_OEE_parallel_units" : "batches_per_day_days_per_year";
+    }
+
+    function effectiveBatchesPerYear(basis) {
+      return scheduleMethodInUse(basis) === "duration_OEE_parallel_units" ? cycleBatchesPerYear(basis) : calendarBatchesPerYear(basis);
     }
 
     function effectiveBatchDurationH(basis) {
@@ -4881,7 +4915,10 @@
         ? { min: productiveHours * parallel / cycleRange.max, max: productiveHours * parallel / cycleRange.min }
         : null;
       return {
-        method: Number.isFinite(effectiveBatches) ? "duration_OEE_parallel_units" : "batches_per_day_days_per_year",
+        method: scheduleMethodInUse(basis),
+        batchesPerDay: basis.batchesPerDay,
+        operatingDays: basis.operatingDays,
+        declaredKgPerYear: Number.isFinite(effectiveBatches) && Number.isFinite(targetBatch) ? formatNumber(effectiveBatches * targetBatch) : "",
         effectiveBatchesPerYear: Number.isFinite(effectiveBatches) ? formatNumber(effectiveBatches) : "",
         effectiveBatchesPerYearRange: batchesRange && batchesRange.max - batchesRange.min > 0.05 ? `${significantText(batchesRange.min, 3)}–${significantText(batchesRange.max, 3)}` : "",
         batchMakespanRangeH: makespanRange && makespanRange.max > makespanRange.min ? rangeHoursText(makespanRange.min, makespanRange.max) : "",
@@ -7090,12 +7127,23 @@
         </div>
       `;
       const view = ensureScaleBasis().planningScenario === "overlapped" ? "overlapped" : "conservative";
-      const activeRow = view === "overlapped"
+      const cycleRow = view === "overlapped"
         ? row("Overlapped plan", schedule.plantCycleTimeH, schedule.overlappedBatchesPerYear, schedule.overlappedKgPerYear, "new batches start at the limiting equipment cycle")
         : row("Conservative plan", schedule.batchMakespanH, schedule.conservativeBatchesPerYear, schedule.conservativeKgPerYear, "a new batch starts after the previous batch leaves the train");
-      const comparison = view === "overlapped"
-        ? `Conservative comparison: ${schedule.conservativeKgPerYear ? formatDisplayNumber(schedule.conservativeKgPerYear) : "missing"} kg/year`
-        : `Overlapped comparison: ${schedule.overlappedKgPerYear ? formatDisplayNumber(schedule.overlappedKgPerYear) : "missing"} kg/year`;
+      // With the batches/day method the declared plan is the plan; the cycle-time scenario is the
+      // comparison, so the panel never shows two different annual batch counts as if both held.
+      const declared = schedule.method === "batches_per_day_days_per_year";
+      const activeRow = declared
+        ? row("Declared plan", schedule.batchMakespanH, schedule.effectiveBatchesPerYear, schedule.declaredKgPerYear, `${schedule.batchesPerDay || "?"} batches/day x ${schedule.operatingDays || "?"} operating days`)
+        : cycleRow;
+      const cycleLabel = view === "overlapped" ? "Overlapped" : "Conservative";
+      const cycleBatches = view === "overlapped" ? schedule.overlappedBatchesPerYear : schedule.conservativeBatchesPerYear;
+      const cycleKg = view === "overlapped" ? schedule.overlappedKgPerYear : schedule.conservativeKgPerYear;
+      const comparison = declared
+        ? `${cycleLabel} cycle-time comparison: ${cycleBatches ? formatDisplayNumber(cycleBatches) : "missing"} batches/year · ${cycleKg ? formatDisplayNumber(cycleKg) : "missing"} kg/year`
+        : view === "overlapped"
+          ? `Conservative comparison: ${schedule.conservativeKgPerYear ? formatDisplayNumber(schedule.conservativeKgPerYear) : "missing"} kg/year`
+          : `Overlapped comparison: ${schedule.overlappedKgPerYear ? formatDisplayNumber(schedule.overlappedKgPerYear) : "missing"} kg/year`;
       return `
         ${activeRow}
         <div class="muted small scale-scenario-comparison">${escapeHtml(comparison)}</div>
@@ -8069,7 +8117,7 @@
       if (!model.basis.targetProduct.trim()) {
         issues.push(ruleIssue("medium", "Target product missing", "Scale propagation cannot be reviewed clearly without naming the product stream.", "scale-up basis", "Set the target product name."));
       }
-      if (model.basis.mode !== "continuous" && model.schedule.method !== "duration_OEE_parallel_units" && !Number.isFinite(parseStreamQuantity(model.basis.batchesPerDay))) {
+      if (model.basis.mode !== "continuous" && !model.schedule.effectiveBatchesPerYear) {
         issues.push(ruleIssue("medium", "Batch schedule missing", "Batch scale-up requires either batches/day (fallback) or a batch duration with OEE and parallel units (preferred once Gantt data exists) to convert between batch, daily, and annual bases.", "scale-up basis", "Enter batches/day, or add task durations so the duration-based method can take over."));
       }
       if (["kg/year", "t/year"].includes(model.basis.targetUnit) && model.schedule.method !== "duration_OEE_parallel_units" && !gantt.ready) {
@@ -11506,12 +11554,12 @@
           fate: "product",
           quantity: "3.60",
           unit: "kg",
-          source: "simple demo",
+          source: "simple demo; properties per SCCS/1627/21 s. 3.1.8 (see citations.sccsOctocrylene): mp -10 degC, no boiling point at 1 atm (Tb extrapolated), vapour pressure negligible",
           thermalSensitivity: "high",
-          mw: "361.5",
-          tb: "480",
-          tm: "280",
-          pvap: "10",
+          mw: "361.48",
+          tb: "700",
+          tm: "263",
+          pvap: "0.000001",
           pvapTemperature: "298.15",
           solubilityParameter: "19.2",
           molarVolume: "310",
@@ -15875,7 +15923,7 @@
 
     function renderContextMenuOptions() {
       const ids = groupIdsInTextOrder();
-      $("ctxGroupSelect").innerHTML = ids.map(id => `<option value="${id}">${id}</option>`).join("");
+      $("ctxGroupSelect").innerHTML = ids.map(id => `<option value="${escapeAttr(id)}">${escapeHtml(id)}</option>`).join("");
       $("ctxCombine").disabled = state.selectedIds.length < 2;
       $("ctxAssignGroup").disabled = ids.length === 0;
       $("ctxMergeBlocks").disabled = state.selectedIds.length < 2;
@@ -16452,12 +16500,32 @@
     function centerSelection() {
       const block = selectedBlock();
       const endpoint = block?.groupId || block?.id || state.selectedGroupId || groupIdsInTextOrder()[0];
-      const center = endpointCenter(endpoint) || { x: 0, y: 0 };
-      $("groupFlow").scrollTo({
-        left: Math.max(0, center.x * state.zoom - $("groupFlow").clientWidth / 2),
-        top: Math.max(0, center.y * state.zoom - $("groupFlow").clientHeight / 2),
+      const rect = endpointRect(endpoint) || { x: 0, y: 0, w: 0, h: 0 };
+      const flow = $("groupFlow");
+      const visibleHeight = boardVisibleHeight();
+      // A task taller than the visible band (an expanded group over a low board) is aligned to
+      // the top of the band so its head stays readable; centring it put the head out of view.
+      const top = rect.h * state.zoom > visibleHeight - 24
+        ? rect.y * state.zoom - 12
+        : (rect.y + rect.h / 2) * state.zoom - visibleHeight / 2;
+      flow.scrollTo({
+        left: Math.max(0, (rect.x + rect.w / 2) * state.zoom - flow.clientWidth / 2),
+        top: Math.max(0, top),
         behavior: "smooth"
       });
+    }
+
+    // The material editor slides up over the lower part of the board, so "centre of the board"
+    // means the centre of what stays visible above it - otherwise the selection lands under the
+    // editor.
+    function boardVisibleHeight() {
+      const flow = $("groupFlow");
+      const editor = $("stepFlowInspector");
+      if (!editor || editor.classList.contains("empty") || typeof editor.getBoundingClientRect !== "function") return flow.clientHeight;
+      const flowRect = flow.getBoundingClientRect();
+      const editorRect = editor.getBoundingClientRect();
+      if (!(editorRect.height > 0) || editorRect.top <= flowRect.top || editorRect.top >= flowRect.bottom) return flow.clientHeight;
+      return editorRect.top - flowRect.top;
     }
 
     function setZoom(nextZoom, anchor = "center") {
@@ -16916,9 +16984,6 @@
     $("tutorialMode")?.addEventListener("click", () => {
       state.tutorialFull = !state.tutorialFull;
       goToTutorialStep(state.tutorialIndex, state.tutorialIndex);
-    });
-    $("tutorialOverlay").addEventListener("click", event => {
-      if (event.target === $("tutorialOverlay")) closeTutorial();
     });
     window.addEventListener("resize", () => {
       if ($("tutorialOverlay").hidden) return;

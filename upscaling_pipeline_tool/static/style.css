@@ -8059,9 +8059,34 @@
 
     .rule-card-head {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 8px;
+      min-width: 0;
       cursor: pointer;
+    }
+
+    /* Grid items default to min-width:auto, so one rule head that could not shrink (pill, full
+       title, badges, chevron in a row) used to widen the whole heuristics panel past the
+       inspector, clipping every finding on both sides. The title is the part that gives way. */
+    #heuristicsPanel,
+    .scale-results,
+    .scale-metric,
+    .rule-results,
+    .rule-card {
+      min-width: 0;
+    }
+
+    .rule-card-head strong {
+      flex: 1 1 auto;
+      min-width: 0;
+      white-space: normal;
+    }
+
+    .rule-card-head .severity-pill,
+    .rule-card-head .pill,
+    .rule-card-chevron {
+      flex-shrink: 0;
     }
 
     .rule-card.collapsed {
@@ -8265,6 +8290,12 @@
       inset: 0;
       z-index: 940;
       background: transparent;
+      /* The overlay sits above the app's own modals (z-index 920) so the spotlight and card can
+         highlight elements inside them, but it must not intercept clicks aimed at that real
+         content underneath - otherwise every click on a spotlighted button (Apply Pathway, Save
+         reaction balance, ...) hits this transparent layer instead and closes the tutorial and
+         the modal together. Only the card re-enables pointer events for itself. */
+      pointer-events: none;
     }
 
     .tutorial-overlay[hidden] {
@@ -8281,12 +8312,19 @@
       transition: left 140ms ease, top 140ms ease, width 140ms ease, height 140ms ease;
     }
 
+    /* When a ring marks the exact element inside a large spotlight, the spotlight only dims the
+       rest of the screen: a second white frame around the whole panel competed with the ring. */
+    .tutorial-spotlight.framed {
+      border-color: transparent;
+      box-shadow: 0 0 0 9999px rgba(15, 24, 31, 0.58);
+    }
+
     .tutorial-arrow {
       position: fixed;
       z-index: 903;
       height: 0;
       border-top: 3px solid #fff;
-      filter: drop-shadow(0 2px 4px rgba(15, 24, 31, 0.36));
+      filter: drop-shadow(0 0 1.5px rgba(15, 24, 31, 0.8));
       pointer-events: none;
       transform-origin: 0 50%;
       animation: tutorialArrowPulse 950ms ease-in-out infinite;
@@ -8336,6 +8374,7 @@
     .tutorial-card {
       position: fixed;
       z-index: 902;
+      pointer-events: auto;
       display: grid;
       gap: 9px;
       padding: 14px;

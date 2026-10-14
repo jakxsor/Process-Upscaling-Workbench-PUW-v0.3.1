@@ -17,7 +17,12 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 
-MAX_EXCEL_ROWS = 1_048_576
+# Well under Excel's sheet limit: a workbook of a million rows is minutes of CPU and gigabytes of
+# memory for openpyxl, and no inventory for review needs it.
+MAX_EXCEL_ROWS = 50_000
+# A cell text starting with one of these is read by Excel as a formula when the recipient opens
+# or re-enters it (=HYPERLINK(...), DDE payloads); such cells are written as quoted text.
+FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 DEFAULT_COLUMN_WIDTH = 18
 
@@ -398,6 +403,10 @@ def render_lci_workbook_xlsx(project: dict[str, Any]) -> bytes:
         safe_rows = rows[:MAX_EXCEL_ROWS]
         for row in safe_rows:
             worksheet.append([_excel_value(value) for value in row])
+            for cell in worksheet[worksheet.max_row]:
+                if isinstance(cell.value, str) and cell.value.startswith(FORMULA_PREFIXES):
+                    cell.data_type = "s"
+                    cell.quotePrefix = True
 
         worksheet.freeze_panes = "A2"
         worksheet.sheet_view.showGridLines = False
