@@ -35,7 +35,7 @@
     const ventInKg = reactorVentCyclohexaneKg + evaporatorVentCyclohexaneKg;
     // Cyclohexane dissolved in the Dean-Stark water (55 mg/L at 25 degC in 0.050 kg water): 3 mg.
     const deanStarkPurgeCyclohexaneKg = 0.00001;
-    // Water removed by the 4A bed: dissolved (3.3 wt% in EtOAc, 0.01 wt% in cyclohexane) plus
+    // Water removed by the 4A bed: dissolved (3.3 wt% in EtOAc, 0.0069 wt% in cyclohexane) plus
     // 0.1-0.5 wt% entrained after the decanter, minus the 500 ppm left in the product.
     const sieveRegenerationWaterKg = 0.040;
     const wastewaterKg = Number(reactionWaterKg) + washWaterL * 0.997 + Number(catalystKg) + brineKg + sieveRegenerationWaterKg;

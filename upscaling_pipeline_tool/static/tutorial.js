@@ -19,7 +19,7 @@ const tutorialMaterialRows = [
 ];
 
 const tutorialRecoveryRows = [
-  { role: "input", name: "benzyl acetate product-rich liquid", quantity: "3.25", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+  { role: "input", name: "benzyl acetate product-rich liquid", quantity: "3.05", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
   { role: "output", name: "triethylamine overhead recovery", quantity: "0.20", unit: "kg", phase: "V", status: "estimated", timing: "in-process intermediate", fate: "recovered solvent", scalingMode: "per batch", destinationGroup: "G1", recoveryPercent: "95" },
   { role: "output", name: "acetic anhydride recovery cut", quantity: "0.08", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "recover", scalingMode: "per batch", destinationGroup: "G1", recoveryPercent: "90" },
   { role: "output", name: "benzyl acetate product", quantity: "1.25", unit: "kg", phase: "L", status: "estimated", timing: "final output", fate: "product", scalingMode: "per batch" },
