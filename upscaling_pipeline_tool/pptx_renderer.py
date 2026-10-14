@@ -527,6 +527,10 @@ def _draw_unit(writer: _ShapeWriter, group: dict[str, Any], category_styles: dic
         _draw_boundary_outlets(writer, group)
 
 
+MAX_PPTX_UNITS = 500
+MAX_PPTX_LINKS = 2000
+
+
 def render_flowsheet_pptx(payload: dict[str, Any]) -> bytes:
     flowsheet = payload.get("flowsheet") if isinstance(payload, dict) else None
     if not isinstance(flowsheet, dict):
@@ -535,6 +539,13 @@ def render_flowsheet_pptx(payload: dict[str, Any]) -> bytes:
     groups = [item for item in flowsheet.get("groups") or [] if isinstance(item, dict)]
     if not groups:
         raise ValueError("No grouped operations available for PowerPoint export.")
+    # One slide of shapes; a payload past this is not a flowsheet anyone drew and would only
+    # occupy the server.
+    if len(groups) > MAX_PPTX_UNITS:
+        raise ValueError(f"Too many units for the PowerPoint export (limit {MAX_PPTX_UNITS}).")
+    link_count = sum(len(flowsheet.get(key) or []) for key in ("forwardLinks", "auxiliaryLinks", "recycleLinks"))
+    if link_count > MAX_PPTX_LINKS:
+        raise ValueError(f"Too many links for the PowerPoint export (limit {MAX_PPTX_LINKS}).")
 
     diagram_w = max(900, _float(flowsheet.get("width"), 1880))
     diagram_h = max(620, _float(flowsheet.get("height"), 760))
