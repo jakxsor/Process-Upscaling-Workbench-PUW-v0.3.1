@@ -8059,9 +8059,34 @@
 
     .rule-card-head {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 8px;
+      min-width: 0;
       cursor: pointer;
+    }
+
+    /* Grid items default to min-width:auto, so one rule head that could not shrink (pill, full
+       title, badges, chevron in a row) used to widen the whole heuristics panel past the
+       inspector, clipping every finding on both sides. The title is the part that gives way. */
+    #heuristicsPanel,
+    .scale-results,
+    .scale-metric,
+    .rule-results,
+    .rule-card {
+      min-width: 0;
+    }
+
+    .rule-card-head strong {
+      flex: 1 1 auto;
+      min-width: 0;
+      white-space: normal;
+    }
+
+    .rule-card-head .severity-pill,
+    .rule-card-head .pill,
+    .rule-card-chevron {
+      flex-shrink: 0;
     }
 
     .rule-card.collapsed {
