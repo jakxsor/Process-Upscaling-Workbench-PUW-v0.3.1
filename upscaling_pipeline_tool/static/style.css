@@ -8287,12 +8287,19 @@
       transition: left 140ms ease, top 140ms ease, width 140ms ease, height 140ms ease;
     }
 
+    /* When a ring marks the exact element inside a large spotlight, the spotlight only dims the
+       rest of the screen: a second white frame around the whole panel competed with the ring. */
+    .tutorial-spotlight.framed {
+      border-color: transparent;
+      box-shadow: 0 0 0 9999px rgba(15, 24, 31, 0.58);
+    }
+
     .tutorial-arrow {
       position: fixed;
       z-index: 903;
       height: 0;
       border-top: 3px solid #fff;
-      filter: drop-shadow(0 2px 4px rgba(15, 24, 31, 0.36));
+      filter: drop-shadow(0 0 1.5px rgba(15, 24, 31, 0.8));
       pointer-events: none;
       transform-origin: 0 50%;
       animation: tutorialArrowPulse 950ms ease-in-out infinite;
