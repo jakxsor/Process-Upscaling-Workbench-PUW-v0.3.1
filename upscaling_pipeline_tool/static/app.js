@@ -16452,12 +16452,32 @@
     function centerSelection() {
       const block = selectedBlock();
       const endpoint = block?.groupId || block?.id || state.selectedGroupId || groupIdsInTextOrder()[0];
-      const center = endpointCenter(endpoint) || { x: 0, y: 0 };
-      $("groupFlow").scrollTo({
-        left: Math.max(0, center.x * state.zoom - $("groupFlow").clientWidth / 2),
-        top: Math.max(0, center.y * state.zoom - $("groupFlow").clientHeight / 2),
+      const rect = endpointRect(endpoint) || { x: 0, y: 0, w: 0, h: 0 };
+      const flow = $("groupFlow");
+      const visibleHeight = boardVisibleHeight();
+      // A task taller than the visible band (an expanded group over a low board) is aligned to
+      // the top of the band so its head stays readable; centring it put the head out of view.
+      const top = rect.h * state.zoom > visibleHeight - 24
+        ? rect.y * state.zoom - 12
+        : (rect.y + rect.h / 2) * state.zoom - visibleHeight / 2;
+      flow.scrollTo({
+        left: Math.max(0, (rect.x + rect.w / 2) * state.zoom - flow.clientWidth / 2),
+        top: Math.max(0, top),
         behavior: "smooth"
       });
+    }
+
+    // The material editor slides up over the lower part of the board, so "centre of the board"
+    // means the centre of what stays visible above it - otherwise the selection lands under the
+    // editor.
+    function boardVisibleHeight() {
+      const flow = $("groupFlow");
+      const editor = $("stepFlowInspector");
+      if (!editor || editor.classList.contains("empty") || typeof editor.getBoundingClientRect !== "function") return flow.clientHeight;
+      const flowRect = flow.getBoundingClientRect();
+      const editorRect = editor.getBoundingClientRect();
+      if (!(editorRect.height > 0) || editorRect.top <= flowRect.top || editorRect.top >= flowRect.bottom) return flow.clientHeight;
+      return editorRect.top - flowRect.top;
     }
 
     function setZoom(nextZoom, anchor = "center") {
