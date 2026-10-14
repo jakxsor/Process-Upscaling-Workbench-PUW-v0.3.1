@@ -6,6 +6,9 @@ import gzip
 import json
 import os
 import threading
+import collections
+import time
+import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 if __package__:
@@ -43,6 +46,67 @@ def _export_renderer(kind):
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 MAX_REQUEST_BYTES = 12 * 1024 * 1024
+# A PubChem lookup carries a compound name, not a project: a small body limit keeps a slow-body
+# client from holding a thread on that route.
+PUBCHEM_MAX_REQUEST_BYTES = 4 * 1024
+# Each lookup fans out to up to four PubChem requests and PubChem throttles per source IP, so an
+# unauthenticated caller could get the shared egress address blocked for everyone. A per-client
+# budget and a result cache keep one client from spending the whole allowance.
+PUBCHEM_RATE_LIMIT = 30
+PUBCHEM_RATE_WINDOW_S = 60.0
+PUBCHEM_CACHE_SIZE = 512
+PUBCHEM_CACHE_TTL_S = 24 * 3600.0
+_PUBCHEM_LOCK = threading.Lock()
+_PUBCHEM_HITS = {}
+_PUBCHEM_CACHE = collections.OrderedDict()
+
+
+def _pubchem_allowed(client_key, now=None):
+    now = time.monotonic() if now is None else now
+    with _PUBCHEM_LOCK:
+        stale = [key for key, hits in _PUBCHEM_HITS.items() if not hits or hits[-1] < now - PUBCHEM_RATE_WINDOW_S]
+        for key in stale:
+            del _PUBCHEM_HITS[key]
+        hits = [stamp for stamp in _PUBCHEM_HITS.get(client_key, []) if stamp >= now - PUBCHEM_RATE_WINDOW_S]
+        if len(hits) >= PUBCHEM_RATE_LIMIT:
+            _PUBCHEM_HITS[client_key] = hits
+            return False
+        hits.append(now)
+        _PUBCHEM_HITS[client_key] = hits
+        return True
+
+
+def _pubchem_cached(cache_key, compute, now=None):
+    now = time.monotonic() if now is None else now
+    with _PUBCHEM_LOCK:
+        hit = _PUBCHEM_CACHE.get(cache_key)
+        if hit is not None and hit[0] > now:
+            _PUBCHEM_CACHE.move_to_end(cache_key)
+            return hit[1]
+    result = compute()
+    # Only successful answers are kept: a transient PubChem failure should not be served for a day.
+    if isinstance(result, dict) and result.get("ok", True):
+        with _PUBCHEM_LOCK:
+            _PUBCHEM_CACHE[cache_key] = (now + PUBCHEM_CACHE_TTL_S, result)
+            _PUBCHEM_CACHE.move_to_end(cache_key)
+            while len(_PUBCHEM_CACHE) > PUBCHEM_CACHE_SIZE:
+                _PUBCHEM_CACHE.popitem(last=False)
+    return result
+
+
+# Every script is a same-origin file and nothing is fetched from another origin, so the policy
+# can be strict. Inline style attributes exist in the rendered HTML, hence 'unsafe-inline' for
+# styles only; scripts stay file-only, which also defuses any markup that slips through escaping.
+SECURITY_HEADERS = (
+    ("X-Content-Type-Options", "nosniff"),
+    ("X-Frame-Options", "DENY"),
+    ("Referrer-Policy", "no-referrer"),
+    (
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+        "connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+    ),
+)
 
 
 def _read_static(filename):
@@ -702,10 +766,25 @@ STATIC_ROUTES = {
 
 
 class AppHandler(BaseHTTPRequestHandler):
+    # A client that opens a connection and never finishes its request used to hold a thread for
+    # as long as it liked; the server is one thread per connection.
+    timeout = 30
+    server_version = "ProcessUpscalingWorkbench"
+    sys_version = ""
+
     def _send_no_cache_headers(self):
         self.send_header("Cache-Control", "no-store, max-age=0")
         self.send_header("Pragma", "no-cache")
         self.send_header("Expires", "0")
+        for name, value in SECURITY_HEADERS:
+            self.send_header(name, value)
+
+    def _client_key(self):
+        # Behind Render's proxy the socket peer is the proxy; the first forwarded address is the
+        # client. Locally there is no proxy and the peer is the client.
+        forwarded = self.headers.get("X-Forwarded-For", "")
+        first = forwarded.split(",")[0].strip() if forwarded else ""
+        return first or self.client_address[0]
 
     def _resolve(self):
         """The body to send, its content type, and a key that changes when the file changes."""
@@ -765,8 +844,12 @@ class AppHandler(BaseHTTPRequestHandler):
         except ValueError:
             self._send_json(400, {"ok": False, "error": "Invalid Content-Length header."})
             return
-        if length <= 0 or length > MAX_REQUEST_BYTES:
-            self._send_json(413, {"ok": False, "error": f"Request body must be between 1 and {MAX_REQUEST_BYTES} bytes."})
+        limit = PUBCHEM_MAX_REQUEST_BYTES if self.path == "/api/pubchem" else MAX_REQUEST_BYTES
+        if length <= 0 or length > limit:
+            self._send_json(413, {"ok": False, "error": f"Request body must be between 1 and {limit} bytes."})
+            return
+        if self.path == "/api/pubchem" and not _pubchem_allowed(self._client_key()):
+            self._send_json(429, {"ok": False, "error": "Too many PubChem lookups; wait a minute and try again."})
             return
         try:
             try:
@@ -806,8 +889,10 @@ class AppHandler(BaseHTTPRequestHandler):
                 )
                 return
             self._send_json(200, result)
-        except Exception as exc:
-            self._send_json(500, {"ok": False, "error": str(exc)})
+        except Exception:
+            # The traceback goes to the server log; the client gets no library internals or paths.
+            traceback.print_exc()
+            self._send_json(500, {"ok": False, "error": "The server could not process this request."})
 
     def _send_json(self, status, payload):
         body = json.dumps(payload).encode("utf-8")
@@ -828,7 +913,8 @@ class AppHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _lookup_pubchem(self, payload):
-        return lookup_pubchem(payload)
+        cache_key = (str(payload.get("mode", "lookup")).strip().lower(), str(payload.get("name", "")).strip().lower())
+        return _pubchem_cached(cache_key, lambda: lookup_pubchem(payload))
 
     def log_message(self, format, *args):
         print("%s - %s" % (self.address_string(), format % args))
