@@ -4841,13 +4841,36 @@
       return effectiveBatchDurationH(basis);
     }
 
-    function effectiveBatchesPerYear(basis) {
-      if (basis.scheduleMethod === "batches_per_day") return NaN;
+    // Calendar / cycle time x OEE x trains.
+    function cycleBatchesPerYear(basis) {
       const duration = planningCycleTimeH(basis);
       const productiveHours = annualProductiveHours(basis);
       const parallel = parseStreamQuantity(basis.parallelUnits);
       if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(productiveHours) || productiveHours <= 0 || !Number.isFinite(parallel) || parallel <= 0) return NaN;
       return productiveHours * parallel / duration;
+    }
+
+    // Batches/day x operating days: a plant-level figure as the user declares it, so parallel
+    // trains are not applied on top of it.
+    function calendarBatchesPerYear(basis) {
+      const batchesPerDay = parseStreamQuantity(basis.batchesPerDay);
+      const operatingDays = parseStreamQuantity(basis.operatingDays);
+      if (!Number.isFinite(batchesPerDay) || batchesPerDay <= 0 || !Number.isFinite(operatingDays) || operatingDays <= 0) return NaN;
+      return batchesPerDay * operatingDays;
+    }
+
+    // Which annual-batches calculation is in use: the method selected, or on Auto the cycle-time
+    // method when a duration exists and batches/day otherwise. The method used to be inferred
+    // from whether the cycle-time figure existed, so selecting Batches/day reported the annual
+    // batches as missing while the production-schedule rows still showed cycle-time figures.
+    function scheduleMethodInUse(basis) {
+      if (basis.scheduleMethod === "batches_per_day") return "batches_per_day_days_per_year";
+      if (basis.scheduleMethod === "duration") return "duration_OEE_parallel_units";
+      return Number.isFinite(cycleBatchesPerYear(basis)) ? "duration_OEE_parallel_units" : "batches_per_day_days_per_year";
+    }
+
+    function effectiveBatchesPerYear(basis) {
+      return scheduleMethodInUse(basis) === "duration_OEE_parallel_units" ? cycleBatchesPerYear(basis) : calendarBatchesPerYear(basis);
     }
 
     function effectiveBatchDurationH(basis) {
@@ -4881,7 +4904,10 @@
         ? { min: productiveHours * parallel / cycleRange.max, max: productiveHours * parallel / cycleRange.min }
         : null;
       return {
-        method: Number.isFinite(effectiveBatches) ? "duration_OEE_parallel_units" : "batches_per_day_days_per_year",
+        method: scheduleMethodInUse(basis),
+        batchesPerDay: basis.batchesPerDay,
+        operatingDays: basis.operatingDays,
+        declaredKgPerYear: Number.isFinite(effectiveBatches) && Number.isFinite(targetBatch) ? formatNumber(effectiveBatches * targetBatch) : "",
         effectiveBatchesPerYear: Number.isFinite(effectiveBatches) ? formatNumber(effectiveBatches) : "",
         effectiveBatchesPerYearRange: batchesRange && batchesRange.max - batchesRange.min > 0.05 ? `${significantText(batchesRange.min, 3)}–${significantText(batchesRange.max, 3)}` : "",
         batchMakespanRangeH: makespanRange && makespanRange.max > makespanRange.min ? rangeHoursText(makespanRange.min, makespanRange.max) : "",
@@ -7090,12 +7116,23 @@
         </div>
       `;
       const view = ensureScaleBasis().planningScenario === "overlapped" ? "overlapped" : "conservative";
-      const activeRow = view === "overlapped"
+      const cycleRow = view === "overlapped"
         ? row("Overlapped plan", schedule.plantCycleTimeH, schedule.overlappedBatchesPerYear, schedule.overlappedKgPerYear, "new batches start at the limiting equipment cycle")
         : row("Conservative plan", schedule.batchMakespanH, schedule.conservativeBatchesPerYear, schedule.conservativeKgPerYear, "a new batch starts after the previous batch leaves the train");
-      const comparison = view === "overlapped"
-        ? `Conservative comparison: ${schedule.conservativeKgPerYear ? formatDisplayNumber(schedule.conservativeKgPerYear) : "missing"} kg/year`
-        : `Overlapped comparison: ${schedule.overlappedKgPerYear ? formatDisplayNumber(schedule.overlappedKgPerYear) : "missing"} kg/year`;
+      // With the batches/day method the declared plan is the plan; the cycle-time scenario is the
+      // comparison, so the panel never shows two different annual batch counts as if both held.
+      const declared = schedule.method === "batches_per_day_days_per_year";
+      const activeRow = declared
+        ? row("Declared plan", schedule.batchMakespanH, schedule.effectiveBatchesPerYear, schedule.declaredKgPerYear, `${schedule.batchesPerDay || "?"} batches/day x ${schedule.operatingDays || "?"} operating days`)
+        : cycleRow;
+      const cycleLabel = view === "overlapped" ? "Overlapped" : "Conservative";
+      const cycleBatches = view === "overlapped" ? schedule.overlappedBatchesPerYear : schedule.conservativeBatchesPerYear;
+      const cycleKg = view === "overlapped" ? schedule.overlappedKgPerYear : schedule.conservativeKgPerYear;
+      const comparison = declared
+        ? `${cycleLabel} cycle-time comparison: ${cycleBatches ? formatDisplayNumber(cycleBatches) : "missing"} batches/year · ${cycleKg ? formatDisplayNumber(cycleKg) : "missing"} kg/year`
+        : view === "overlapped"
+          ? `Conservative comparison: ${schedule.conservativeKgPerYear ? formatDisplayNumber(schedule.conservativeKgPerYear) : "missing"} kg/year`
+          : `Overlapped comparison: ${schedule.overlappedKgPerYear ? formatDisplayNumber(schedule.overlappedKgPerYear) : "missing"} kg/year`;
       return `
         ${activeRow}
         <div class="muted small scale-scenario-comparison">${escapeHtml(comparison)}</div>
@@ -8069,7 +8106,7 @@
       if (!model.basis.targetProduct.trim()) {
         issues.push(ruleIssue("medium", "Target product missing", "Scale propagation cannot be reviewed clearly without naming the product stream.", "scale-up basis", "Set the target product name."));
       }
-      if (model.basis.mode !== "continuous" && model.schedule.method !== "duration_OEE_parallel_units" && !Number.isFinite(parseStreamQuantity(model.basis.batchesPerDay))) {
+      if (model.basis.mode !== "continuous" && !model.schedule.effectiveBatchesPerYear) {
         issues.push(ruleIssue("medium", "Batch schedule missing", "Batch scale-up requires either batches/day (fallback) or a batch duration with OEE and parallel units (preferred once Gantt data exists) to convert between batch, daily, and annual bases.", "scale-up basis", "Enter batches/day, or add task durations so the duration-based method can take over."));
       }
       if (["kg/year", "t/year"].includes(model.basis.targetUnit) && model.schedule.method !== "duration_OEE_parallel_units" && !gantt.ready) {
