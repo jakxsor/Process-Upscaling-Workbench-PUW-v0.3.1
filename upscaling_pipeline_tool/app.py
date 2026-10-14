@@ -208,8 +208,8 @@ APP_HTML = r"""<!doctype html>
         <button id="loadExampleToggle" aria-haspopup="true" aria-expanded="false">Load example ▾</button>
         <div id="loadExampleMenu" class="header-dropdown-menu" hidden role="menu">
           <button id="loadSample" role="menuitem" title="SI-derived case with a readability-normalized cyclohexane protocol">Octocrylene Case</button>
-          <button id="loadMethylbenzeneCase" role="menuitem">3-Reagent Case</button>
-          <button id="loadBiodieselCase" role="menuitem" title="Base-catalysed transesterification of vegetable oil to biodiesel with literature quantities (Freedman 1984, Van Gerpen 2005, EN 14214)">Biodiesel Case</button>
+          <button id="loadMethylbenzeneCase" role="menuitem" title="Illustrative synthetic case with no literature source: benzyl alcohol acetylation with triethylamine, used to exercise the reaction and separation workflow">3-Reagent Case</button>
+          <button id="loadBiodieselCase" role="menuitem" title="Base-catalysed transesterification of vegetable oil to biodiesel. Reaction charges and conditions from Freedman 1984 and Van Gerpen 2005, product limits per EN 14214; downstream splits, losses and times are engineering estimates and each row says so">Biodiesel Case</button>
           <button id="loadBiodieselLutzeCase" role="menuitem" title="The same reaction without its downstream train: build the separation with the Lutze/Garg screening and compare it with the full case">Biodiesel Case, screen with Lutze</button>
         </div>
       </div>

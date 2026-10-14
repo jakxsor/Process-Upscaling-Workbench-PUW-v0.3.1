@@ -133,6 +133,12 @@
   // the regulatory/engineering methods that CALCULATE a loss, and the LCI conventions that say what
   // to ASSUME when it cannot be calculated. Each string is what the user sees on hover.
   const citations = Object.freeze({
+    freedman1984: "Freedman, Pryde & Mounts, Variables affecting the yields of fatty esters from transesterified vegetable oils, J. Am. Oil Chem. Soc. 61(10):1638-1643 (1984), doi:10.1007/BF02541649: 6:1 methanol-to-oil molar ratio, 1 wt% NaOH on oil, 60 degC, 1 h.",
+    vanGerpen2005: "Van Gerpen, Biodiesel processing and production, Fuel Process. Technol. 86(10):1097-1107 (2005), doi:10.1016/j.fuproc.2004.11.005: alkali-catalysed process, glycerol settling, methanol recovery and water washing of the ester phase.",
+    en14214: "EN 14214:2012+A2:2019, Liquid petroleum products - Fatty acid methyl esters (FAME) for use in diesel engines and heating applications - Requirements and test methods, Table 1: ester content >= 96.5 % m/m, water <= 500 mg/kg, methanol <= 0.20 % m/m, triglyceride <= 0.20 % m/m, total glycerol <= 0.25 % m/m.",
+    biodieselLiterature: "Reaction conditions and charges from Freedman et al. 1984 and Van Gerpen 2005 (see citations.freedman1984, citations.vanGerpen2005); product limits per EN 14214.",
+    biodieselDerived: "Stoichiometric and mass-balance arithmetic on the literature charges (6:1 methanol-to-oil, 1 wt% NaOH, 97.5 % conversion; citations.freedman1984) on a 1 kg triolein basis; four significant figures.",
+    biodieselEstimate: "No published figure for this step on this basis: a typical engineering value for alkali-catalysed biodiesel plants, entered so the balance closes. Replace with plant or pilot data before design use.",
     cfrPurge: "40 CFR 63.1257(d)(2)(i)(B), Eq. 12 (filled-vessel purging); derivation in US EPA, Control of VOC Emissions from Batch Processes, EPA-453/R-93-017 (1994), s. 3.1.2.2. EPA guidance: assume the vent is fully saturated for an agitated vessel.",
     cfrVacuum: "40 CFR 63.1257(d)(2)(i)(E), Eq. 33 (vacuum systems); air in-leakage correlations and the VOC load in EPA-453/R-93-017 (1994), s. 3.1.8.1, Eq. 3-25 to 3-32, tracing to Ryans & Croll, Chem. Eng. 88:78 (1981).",
     cfrDrying: "40 CFR 63.1257(d)(2)(i)(G), Eq. 35 (air drying); EPA-453/R-93-017 (1994), s. 3.1.1.",
