@@ -3023,7 +3023,7 @@
           siblings.some(item => state.selectedBlockId === item.id) ? "primary-selected" : ""
         ].filter(Boolean).join(" ");
         const extraLabel = siblings.length > 1 ? ` <span class="pill" title="${escapeAttr(siblings.slice(1).map(item => item.id).join(", "))} share this same text (e.g. parallel-unit copies) — manage them on the board">+${siblings.length - 1}</span>` : "";
-        html += `<span class="${classes}" data-block-id="${block.id}" title="${escapeAttr(siblings.map(item => item.id).join(", "))} / ${escapeAttr(block.groupId || "ungrouped")}"><span class="annotated-block-label">${escapeHtml(block.id)}${extraLabel}</span><button class="annotated-block-delete" data-delete-block="${escapeAttr(block.id)}" title="Delete ${escapeAttr(block.id)}" aria-label="Delete ${escapeAttr(block.id)}">x</button>${escapeHtml(state.text.slice(block.start, block.end))}</span>`;
+        html += `<span class="${classes}" data-block-id="${escapeAttr(block.id)}" title="${escapeAttr(siblings.map(item => item.id).join(", "))} / ${escapeAttr(block.groupId || "ungrouped")}"><span class="annotated-block-label">${escapeHtml(block.id)}${extraLabel}</span><button class="annotated-block-delete" data-delete-block="${escapeAttr(block.id)}" title="Delete ${escapeAttr(block.id)}" aria-label="Delete ${escapeAttr(block.id)}">x</button>${escapeHtml(state.text.slice(block.start, block.end))}</span>`;
         cursor = block.end;
       }
       html += escapeHtml(state.text.slice(cursor));
@@ -3963,10 +3963,10 @@
       const sourcePill = sourceMeta.label === "protocol" ? "" : `<span class="pill">${escapeHtml(sourceMeta.label)}</span>`;
       const needsTask = !block.groupId;
       return `
-        <article class="block-card tip ${state.selectedBlockId === block.id ? "selected" : ""} ${state.selectedIds.includes(block.id) ? "multi" : ""} ${state.connectingFrom === block.id ? "connecting" : ""} ${needsTask ? "needs-task" : ""}" data-block-card="${block.id}" data-tip="${escapeAttr(blockContentsTip(block))}">
+        <article class="block-card tip ${state.selectedBlockId === block.id ? "selected" : ""} ${state.selectedIds.includes(block.id) ? "multi" : ""} ${state.connectingFrom === block.id ? "connecting" : ""} ${needsTask ? "needs-task" : ""}" data-block-card="${escapeAttr(block.id)}" data-tip="${escapeAttr(blockContentsTip(block))}">
           ${needsTask ? `<span class="connect-handle" data-connect-handle="${escapeAttr(block.id)}" title="Drag to another block or group to connect them"></span>` : ""}
           <div class="row between block-card-head">
-            <strong>${block.id}</strong>
+            <strong>${escapeHtml(block.id)}</strong>
             <div class="row" style="gap:4px">
               ${sourcePill}
               <span class="pill accent">${escapeHtml(block.behavior)}</span>
@@ -15912,7 +15912,7 @@
 
     function renderContextMenuOptions() {
       const ids = groupIdsInTextOrder();
-      $("ctxGroupSelect").innerHTML = ids.map(id => `<option value="${id}">${id}</option>`).join("");
+      $("ctxGroupSelect").innerHTML = ids.map(id => `<option value="${escapeAttr(id)}">${escapeHtml(id)}</option>`).join("");
       $("ctxCombine").disabled = state.selectedIds.length < 2;
       $("ctxAssignGroup").disabled = ids.length === 0;
       $("ctxMergeBlocks").disabled = state.selectedIds.length < 2;

@@ -146,6 +146,23 @@
       return value;
     }
 
+    // Block ids and group keys are written into element attributes and option lists by the
+
+    // renderer; an id that is markup is not an id. The app itself only ever mints B1/G1-style ids.
+
+    const PROJECT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+
+    function requireProjectId(value, path) {
+
+      if (!PROJECT_ID_PATTERN.test(String(value ?? ""))) {
+
+        throw new Error(`${path} must be a short identifier (letters, digits, _ . -).`);
+
+      }
+
+    }
+
+
     function validateOptionalProjectObject(value, path) {
       if (value !== undefined && !isPlainProjectObject(value)) throw new Error(`${path} must be an object.`);
     }
@@ -175,6 +192,7 @@
       validateOptionalProjectObject(snapshot.flowsheet, "projectState.flowsheet");
 
       Object.entries(groups).forEach(([groupId, group]) => {
+        requireProjectId(groupId, `projectState.groups key "${groupId}"`);
         requireProjectObject(group, `projectState.groups.${groupId}`);
         if (group.id !== undefined && String(group.id).trim() !== String(groupId)) {
           throw new Error(`projectState.groups.${groupId}.id must match its group key.`);
@@ -192,6 +210,7 @@
         const path = `projectState.blocks[${blockIndex}]`;
         requireProjectObject(block, path);
         if (!String(block.id || "").trim()) throw new Error(`${path}.id must be a non-empty string.`);
+        requireProjectId(block.id, `${path}.id`);
         if (block.groupId !== undefined) {
           validateOptionalProjectScalar(block.groupId, `${path}.groupId`);
           if (String(block.groupId || "").trim() && !groups[String(block.groupId)]) {
